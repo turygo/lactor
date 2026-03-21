@@ -66,3 +66,91 @@ browser.action.onClicked.addListener(async (tab) => {
     console.error("Failed to inject content scripts:", err);
   }
 });
+
+// --- WebSocket proxy via Port API ---
+
+const MAX_RECONNECT = 3;
+
+browser.runtime.onConnect.addListener((port) => {
+  if (port.name !== "lactor-tts") return;
+
+  const wsConns = [null, null]; // dual WebSocket connections
+  let wsUrl = null;
+  let reconnectCounts = [0, 0];
+
+  function createWS(connIndex) {
+    if (!wsUrl) return;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      // Check if both connections are ready
+      if (wsConns[0]?.readyState === WebSocket.OPEN && wsConns[1]?.readyState === WebSocket.OPEN) {
+        try {
+          port.postMessage({ type: "connected" });
+        } catch {}
+      }
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        msg.conn = connIndex;
+        port.postMessage(msg);
+      } catch {}
+    };
+
+    ws.onclose = () => {
+      if (reconnectCounts[connIndex] < MAX_RECONNECT && wsUrl) {
+        reconnectCounts[connIndex]++;
+        setTimeout(() => {
+          wsConns[connIndex] = createWS(connIndex);
+        }, 1000);
+      } else {
+        try {
+          port.postMessage({ type: "ws-error", conn: connIndex, message: "Connection closed" });
+        } catch {}
+      }
+    };
+
+    ws.onerror = () => {
+      try {
+        port.postMessage({ type: "ws-error", conn: connIndex, message: "Connection error" });
+      } catch {}
+    };
+
+    wsConns[connIndex] = ws;
+    return ws;
+  }
+
+  port.onMessage.addListener((msg) => {
+    if (msg.action === "connect") {
+      wsUrl = `ws://localhost:${msg.port}/tts`;
+      reconnectCounts = [0, 0];
+      createWS(0);
+      createWS(1);
+    } else if (msg.action === "speak" || msg.action === "cancel") {
+      const ws = wsConns[msg.conn];
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        const payload = { ...msg };
+        delete payload.conn;
+        ws.send(JSON.stringify(payload));
+      }
+    } else if (msg.action === "close") {
+      closeAll();
+    }
+  });
+
+  function closeAll() {
+    wsUrl = null; // prevent reconnects
+    for (let i = 0; i < 2; i++) {
+      if (wsConns[i] && wsConns[i].readyState <= WebSocket.OPEN) {
+        wsConns[i].close();
+      }
+      wsConns[i] = null;
+    }
+  }
+
+  port.onDisconnect.addListener(() => {
+    closeAll();
+  });
+});

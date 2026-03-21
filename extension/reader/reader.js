@@ -4,9 +4,8 @@ import { Player } from "./components/player.js";
 import { Controls } from "./components/controls.js";
 
 const DEFAULT_PORT = 7890;
-const MAX_RECONNECT = 3;
 
-let port = DEFAULT_PORT;
+let backendPort = DEFAULT_PORT;
 let paragraphs = [];
 let currentParaIndex = 0;
 let voice = "en-US-AriaNeural";
@@ -18,19 +17,17 @@ const contentEl = document.getElementById("content");
 const loadingEl = document.getElementById("loading");
 const errorEl = document.getElementById("error");
 
-// Dual WebSocket connections
-let wsA = null;
-let wsB = null;
-let reconnectCountA = 0;
-let reconnectCountB = 0;
+// Port connection to background script (WebSocket proxy)
+let bgPort = null;
+let bgConnected = false;
 
 // Buffers: paraId -> { audioChunks: [], wordEvents: [], done: bool, buffer: AudioBuffer|null }
 const buffers = new Map();
 
-// Track which WS is playing and which is prefetching
-let playingWs = "A";
+// Track which conn (0 or 1) is playing and which is prefetching
+let playingConn = 0;
 
-// Pending speak requests: paraId -> { resolve, ws }
+// Pending speak requests: paraId -> { resolve }
 const pendingRequests = new Map();
 
 const controls = new Controls({
@@ -52,7 +49,7 @@ async function init() {
   // Get port from storage
   try {
     const result = await browser.storage.local.get("port");
-    if (result.port) port = result.port;
+    if (result.port) backendPort = result.port;
   } catch {}
 
   // Get tabId from URL params
@@ -89,11 +86,11 @@ async function init() {
     loadingEl.style.display = "none";
 
     // Load voices
-    await controls.loadVoices(port);
+    await controls.loadVoices(backendPort);
     if (controls.selectedVoice) voice = controls.selectedVoice;
 
-    // Connect WebSockets
-    connectWS();
+    // Connect to background WebSocket proxy
+    connectToBg();
   } catch (err) {
     showError(`Failed to load content: ${err.message}`);
   }
@@ -105,18 +102,23 @@ function showError(msg) {
   errorEl.style.display = "block";
 }
 
-function connectWS() {
-  const url = `ws://localhost:${port}/tts`;
-  wsA = createWS(url, "A");
-  wsB = createWS(url, "B");
-}
+function connectToBg() {
+  bgPort = browser.runtime.connect({ name: "lactor-tts" });
 
-function createWS(url, label) {
-  const ws = new WebSocket(url);
+  bgPort.onMessage.addListener((msg) => {
+    if (msg.type === "connected") {
+      bgConnected = true;
+      return;
+    }
 
-  ws.onmessage = (event) => {
-    const msg = JSON.parse(event.data);
+    if (msg.type === "ws-error") {
+      console.warn(`Lactor: WS conn ${msg.conn} error: ${msg.message}`);
+      return;
+    }
+
+    // TTS data messages: audio, word, done, error
     const paraId = msg.id;
+    if (!paraId) return;
 
     if (!buffers.has(paraId)) {
       buffers.set(paraId, { audioChunks: [], wordEvents: [], done: false, buffer: null });
@@ -143,48 +145,38 @@ function createWS(url, label) {
         pendingRequests.delete(paraId);
       }
     }
-  };
+  });
 
-  ws.onclose = () => {
-    const count = label === "A" ? reconnectCountA : reconnectCountB;
-    if (count < MAX_RECONNECT) {
-      if (label === "A") reconnectCountA++;
-      else reconnectCountB++;
-      setTimeout(() => {
-        const newWs = createWS(url, label);
-        if (label === "A") wsA = newWs;
-        else wsB = newWs;
-      }, 1000);
-    }
-  };
+  bgPort.onDisconnect.addListener(() => {
+    bgConnected = false;
+    bgPort = null;
+  });
 
-  ws.onerror = () => {};
-
-  return ws;
+  // Tell background to establish WebSocket connections
+  bgPort.postMessage({ action: "connect", port: backendPort });
 }
 
-function getWs(label) {
-  return label === "A" ? wsA : wsB;
-}
-
-function sendSpeak(ws, paraIndex) {
+function sendSpeak(conn, paraIndex) {
   const paraId = `para-${paraIndex}`;
   const text = paragraphs[paraIndex];
   buffers.set(paraId, { audioChunks: [], wordEvents: [], done: false, buffer: null });
 
   return new Promise((resolve) => {
-    pendingRequests.set(paraId, { resolve, ws });
+    pendingRequests.set(paraId, { resolve });
 
-    const trySend = () => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ action: "speak", id: paraId, text, voice }));
-      } else if (ws.readyState === WebSocket.CONNECTING) {
-        setTimeout(trySend, 100);
-      } else {
-        resolve(); // WS closed, give up
-      }
-    };
-    trySend();
+    if (bgPort && bgConnected) {
+      bgPort.postMessage({ action: "speak", conn, id: paraId, text, voice });
+    } else {
+      // Wait for connection then send
+      const checkReady = () => {
+        if (bgPort && bgConnected) {
+          bgPort.postMessage({ action: "speak", conn, id: paraId, text, voice });
+        } else {
+          setTimeout(checkReady, 100);
+        }
+      };
+      setTimeout(checkReady, 100);
+    }
   });
 }
 
@@ -223,19 +215,18 @@ async function playFromParagraph(paraIndex) {
   const paraEl = document.querySelector(`p[data-para="${paraIndex}"]`);
   if (paraEl) paraEl.classList.add("current-para");
 
-  // Request current paragraph on playing WS if not already buffered
-  const currentWs = getWs(playingWs);
+  // Request current paragraph if not already buffered
   if (!buffers.has(paraId) || !buffers.get(paraId).done) {
-    await sendSpeak(currentWs, paraIndex);
+    await sendSpeak(playingConn, paraIndex);
   }
 
-  // Start prefetching next paragraph on the other WS
-  const prefetchWs = getWs(playingWs === "A" ? "B" : "A");
+  // Start prefetching next paragraph on the other connection
+  const prefetchConn = playingConn === 0 ? 1 : 0;
   const nextParaIndex = paraIndex + 1;
   if (nextParaIndex < paragraphs.length) {
     const nextParaId = `para-${nextParaIndex}`;
     if (!buffers.has(nextParaId) || !buffers.get(nextParaId).done) {
-      sendSpeak(prefetchWs, nextParaIndex); // fire and forget
+      sendSpeak(prefetchConn, nextParaIndex); // fire and forget
     }
   }
 
@@ -267,8 +258,8 @@ async function playFromParagraph(paraIndex) {
       buf.audioChunks = [];
       buf.buffer = null;
 
-      // Swap WS roles
-      playingWs = playingWs === "A" ? "B" : "A";
+      // Swap connection roles
+      playingConn = playingConn === 0 ? 1 : 0;
 
       // Play next
       if (controls.isPlaying) {
@@ -287,8 +278,11 @@ async function playFromParagraph(paraIndex) {
 function cleanup() {
   player.destroy();
   highlight.reset();
-  if (wsA && wsA.readyState <= WebSocket.OPEN) wsA.close();
-  if (wsB && wsB.readyState <= WebSocket.OPEN) wsB.close();
+  if (bgPort) {
+    bgPort.postMessage({ action: "close" });
+    bgPort.disconnect();
+    bgPort = null;
+  }
   buffers.clear();
   pendingRequests.clear();
 }
