@@ -60,11 +60,24 @@ class ScopedLogger {
  */
 export async function isDebugMode() {
   try {
-    if (typeof browser !== "undefined" && browser.management) {
-      const self = await browser.management.getSelf();
-      return self.installType === "development";
+    if (typeof browser === "undefined") {
+      console.log("[Lactor:debugDetect] browser is undefined (not in extension context)");
+      return true;
     }
-  } catch {}
-  // API unavailable — likely a temporary add-on, default to enabled
-  return true;
+    if (!browser.management) {
+      console.log("[Lactor:debugDetect] browser.management is unavailable");
+      return true;
+    }
+    if (!browser.management.getSelf) {
+      console.log("[Lactor:debugDetect] browser.management.getSelf is unavailable");
+      return true;
+    }
+    const self = await browser.management.getSelf();
+    const result = self.installType === "development";
+    console.log("[Lactor:debugDetect] installType =", self.installType, "→ debug =", result);
+    return result;
+  } catch (e) {
+    console.log("[Lactor:debugDetect] caught error:", e.message || e);
+    return true;
+  }
 }
