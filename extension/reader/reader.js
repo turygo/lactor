@@ -177,10 +177,31 @@ function dispatchFetch(fetch) {
   send();
 }
 
-function dispatchFetchAndWait(fetch) {
-  dispatchFetch(fetch);
+/**
+ * Ensure a specific paragraph is buffered and ready.
+ * - If already done → resolves immediately
+ * - If in-flight (dispatched by prefetcher) → waits for done
+ * - If not dispatched yet → dispatches and waits
+ */
+function ensureBuffered(paraIndex) {
+  if (buffers.has(paraIndex) && buffers.get(paraIndex).done) {
+    return Promise.resolve();
+  }
+
+  // Not dispatched yet — dispatch it now
+  if (!buffers.has(paraIndex)) {
+    const fetch = scheduler.getNextFetch();
+    if (fetch) dispatchFetch(fetch);
+  }
+
+  // Wait for done event (covers both in-flight and just-dispatched)
   return new Promise((resolve) => {
-    pendingRequests.set(fetch.index, { resolve });
+    // Double-check after microtask in case it completed
+    if (buffers.has(paraIndex) && buffers.get(paraIndex).done) {
+      resolve();
+      return;
+    }
+    pendingRequests.set(paraIndex, { resolve });
   });
 }
 
@@ -232,11 +253,8 @@ async function playFromParagraph(paraIndex) {
   const paraEl = document.querySelector(`p[data-para="${paraIndex}"]`);
   if (paraEl) paraEl.classList.add("current-para");
 
-  // Ensure current paragraph is fetched
-  if (!buffers.has(paraIndex) || !buffers.get(paraIndex).done) {
-    const fetch = scheduler.getNextFetch();
-    if (fetch) await dispatchFetchAndWait(fetch);
-  }
+  // Ensure current paragraph is buffered (may already be in-flight from prefetcher)
+  await ensureBuffered(paraIndex);
 
   // Trigger adaptive prefetch for upcoming paragraphs
   tryPrefetch();
