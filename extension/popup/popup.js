@@ -28,7 +28,7 @@ function showStatus(msg, ok) {
 
 async function checkHealth(port) {
   try {
-    const resp = await fetch(`http://localhost:${port}/health`);
+    const resp = await fetch(`http://127.0.0.1:${port}/health`);
     if (resp.ok) {
       showStatus(`Connected to backend on port ${port}`, true);
     } else {

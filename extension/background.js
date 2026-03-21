@@ -124,7 +124,7 @@ browser.runtime.onConnect.addListener((port) => {
 
   port.onMessage.addListener((msg) => {
     if (msg.action === "connect") {
-      wsUrl = `ws://localhost:${msg.port}/tts`;
+      wsUrl = `ws://127.0.0.1:${msg.port}/tts`;
       reconnectCounts = [0, 0];
       createWS(0);
       createWS(1);

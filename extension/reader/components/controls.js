@@ -51,7 +51,7 @@ export class Controls {
    */
   async loadVoices(port) {
     try {
-      const resp = await fetch(`http://localhost:${port}/voices`);
+      const resp = await fetch(`http://127.0.0.1:${port}/voices`);
       if (!resp.ok) return;
       const voices = await resp.json();
       this._voiceSelect.innerHTML = "";
