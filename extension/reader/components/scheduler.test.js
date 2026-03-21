@@ -53,16 +53,26 @@ describe("PrefetchScheduler", () => {
   const makeParagraphs = (...lengths) => lengths.map((n) => "x".repeat(n));
 
   describe("shouldPrefetch", () => {
-    it("always prefetches when buffer has 0 ready paragraphs (cold start)", () => {
+    it("always prefetches when no in-flight and no buffered (cold start)", () => {
       const s = new PrefetchScheduler(makeParagraphs(50, 50, 50), 3);
-      // bufferedCount=0, should always fetch regardless of remaining time
       assert.equal(s.shouldPrefetch(Infinity), true);
     });
 
-    it("does not prefetch when buffer is at max cap", () => {
-      const s = new PrefetchScheduler(makeParagraphs(50, 50, 50, 50), 3);
-      s._bufferedCount = 3;
+    it("does not prefetch when in-flight + buffered >= max cap", () => {
+      const s = new PrefetchScheduler(makeParagraphs(50, 50, 50, 50, 50), 3);
+      // 2 in-flight + 1 buffered = 3 >= cap
+      s.getNextFetch(); // in-flight on conn 0
+      s.getNextFetch(); // in-flight on conn 1
+      s._bufferedCount = 1;
       assert.equal(s.shouldPrefetch(5000), false);
+    });
+
+    it("does not prefetch when both connections are busy", () => {
+      const s = new PrefetchScheduler(makeParagraphs(50, 50, 50, 50), 3);
+      s.getNextFetch(); // conn 0 busy
+      s.getNextFetch(); // conn 1 busy
+      // Both connections are in-flight — can't dispatch even if cap allows
+      assert.equal(s.shouldPrefetch(0), false);
     });
 
     it("does not prefetch when all paragraphs already fetched", () => {
@@ -75,7 +85,6 @@ describe("PrefetchScheduler", () => {
       const s = new PrefetchScheduler(makeParagraphs(10, 200), 3);
       s.metrics.record(100, 1000); // 10 ms/char
       s._nextFetchIndex = 1; // next is 200 chars → est 2000ms
-      s._bufferedCount = 0;
       // remaining = 2000ms, 80% = 1600ms, est = 2000 > 1600 → prefetch
       assert.equal(s.shouldPrefetch(2000), true);
     });
@@ -88,6 +97,19 @@ describe("PrefetchScheduler", () => {
       // remaining = 10000ms, 80% = 8000, est = 100 < 8000 → no prefetch
       assert.equal(s.shouldPrefetch(10000), false);
     });
+
+    it("allows prefetch after a connection becomes free", () => {
+      const s = new PrefetchScheduler(makeParagraphs(50, 50, 50), 3);
+      s.getNextFetch(); // conn 0 busy, para 0
+      s.getNextFetch(); // conn 1 busy, para 1
+      // Both busy → can't prefetch
+      assert.equal(s.shouldPrefetch(0), false);
+      // Para 0 completes → conn 0 free
+      s._fetchStartTimes.set(0, Date.now() - 100);
+      s.onFetchComplete(0);
+      // Now should allow prefetch (conn 0 is free, cap not hit)
+      assert.equal(s.shouldPrefetch(0), true);
+    });
   });
 
   describe("getNextFetch", () => {
@@ -97,6 +119,11 @@ describe("PrefetchScheduler", () => {
       assert.deepEqual(f0, { conn: 0, index: 0, text: "x".repeat(10) });
       const f1 = s.getNextFetch();
       assert.deepEqual(f1, { conn: 1, index: 1, text: "x".repeat(20) });
+      // Both connections busy — should return null
+      assert.equal(s.getNextFetch(), null);
+      // Complete para 0 → conn 0 free
+      s._fetchStartTimes.set(0, Date.now() - 100);
+      s.onFetchComplete(0);
       const f2 = s.getNextFetch();
       assert.deepEqual(f2, { conn: 0, index: 2, text: "x".repeat(30) });
     });
@@ -120,12 +147,10 @@ describe("PrefetchScheduler", () => {
   describe("onFetchComplete", () => {
     it("records metrics from generation timing", () => {
       const s = new PrefetchScheduler(makeParagraphs(100), 3);
-      s.getNextFetch(); // dispatches para 0
-      // Simulate: started 500ms ago, text is 100 chars
+      s.getNextFetch();
       s._fetchStartTimes.set(0, Date.now() - 500);
       s.onFetchComplete(0);
       const rate = s.metrics.getRate();
-      // 500ms / 100 chars = 5 ms/char (approximately, timing may vary)
       assert.ok(rate > 3 && rate < 8, `Rate should be ~5, got ${rate}`);
     });
 
@@ -135,6 +160,20 @@ describe("PrefetchScheduler", () => {
       s._fetchStartTimes.set(0, Date.now() - 100);
       s.onFetchComplete(0);
       assert.equal(s._bufferedCount, 1);
+    });
+
+    it("frees the connection for reuse", () => {
+      const s = new PrefetchScheduler(makeParagraphs(10, 20, 30), 3);
+      s.getNextFetch(); // conn 0, para 0
+      s.getNextFetch(); // conn 1, para 1
+      // Both busy
+      assert.equal(s.getNextFetch(), null);
+      // Complete para 0 → conn 0 should be free
+      s._fetchStartTimes.set(0, Date.now() - 100);
+      s.onFetchComplete(0);
+      const f = s.getNextFetch();
+      assert.equal(f.conn, 0); // reuses conn 0
+      assert.equal(f.index, 2);
     });
 
     it("cleans up fetch start time entry", () => {
