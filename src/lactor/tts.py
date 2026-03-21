@@ -45,7 +45,7 @@ async def stream_tts(text: str, voice: str) -> AsyncIterator[dict[str, Any]]:
             yield event
         return
 
-    communicate = edge_tts.Communicate(text, voice)
+    communicate = edge_tts.Communicate(text, voice, boundary="WordBoundary")
     search_from = 0
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":
