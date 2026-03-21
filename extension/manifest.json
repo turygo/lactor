@@ -10,9 +10,11 @@
     "ws://localhost/*",
     "ws://127.0.0.1/*"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; connect-src 'self' ws://127.0.0.1:* http://127.0.0.1:*;"
+  },
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "scripts": ["background.js"]
   },
   "action": {
     "default_icon": { "48": "icons/icon-48.png" }
