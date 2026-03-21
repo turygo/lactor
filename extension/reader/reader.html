@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="reader.css">
+</head>
+<body>
+  <div id="controls-bar">
+    <button id="btn-play" title="Play / Pause">&#9654;</button>
+    <select id="voice-select"></select>
+    <button id="btn-close" title="Close">&times;</button>
+  </div>
+  <div id="loading" style="text-align:center; padding:40px; display:none;">Connecting to backend...</div>
+  <div id="error" style="text-align:center; padding:40px; color:#c5221f; display:none;"></div>
+  <article id="content"></article>
+  <script type="module" src="reader.js"></script>
+</body>
+</html>

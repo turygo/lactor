@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { width: 300px; padding: 16px; font-family: system-ui, sans-serif; font-size: 14px; }
+    h2 { margin: 0 0 12px; font-size: 16px; }
+    label { display: block; margin-bottom: 4px; font-weight: 500; }
+    input[type="number"] { width: 80px; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; }
+    button { margin-top: 8px; padding: 6px 16px; background: #4285f4; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #3367d6; }
+    .status { margin-top: 12px; padding: 8px; border-radius: 4px; font-size: 13px; }
+    .status.ok { background: #e6f4ea; color: #137333; }
+    .status.err { background: #fce8e6; color: #c5221f; }
+    .ext-id { margin-top: 12px; font-size: 12px; color: #666; word-break: break-all; }
+    .ext-id code { background: #f1f3f4; padding: 2px 6px; border-radius: 3px; user-select: all; }
+  </style>
+</head>
+<body>
+  <h2>Lactor Settings</h2>
+  <label for="port">Backend Port</label>
+  <input type="number" id="port" min="1024" max="65535" value="7890">
+  <button id="save">Save</button>
+  <div id="status" class="status" style="display:none"></div>
+  <div class="ext-id">
+    Extension ID: <code id="ext-id"></code>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
