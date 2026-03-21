@@ -59,7 +59,7 @@ def main():
 
     print()
     print(f"Automated: {'PASS' if all_pass else 'FAIL'}")
-    print(f"Note: Frontend memory test (bench_frontend_memory.html) requires manual browser run.")
+    print("Note: Frontend memory test (bench_frontend_memory.html) requires manual browser run.")
 
     # Save report
     report = {

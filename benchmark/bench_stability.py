@@ -48,7 +48,7 @@ async def test_rapid_cancel_speak(url, rounds=50):
         while time.monotonic() < timeout:
             try:
                 msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=5))
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
             if msg["type"] == "done":
                 done_ids.add(msg["id"])

@@ -4,9 +4,14 @@ import argparse
 import asyncio
 import json
 import os
-import time
+import subprocess
 
 import websockets
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 VOICE = "en-US-AriaNeural"
@@ -14,27 +19,20 @@ VOICE = "en-US-AriaNeural"
 
 def get_rss_mb(pid):
     """Get RSS of a process in MB (macOS/Linux)."""
-    try:
-        import psutil
-
+    if psutil is not None:
         proc = psutil.Process(pid)
         return proc.memory_info().rss / (1024 * 1024)
-    except ImportError:
-        # Fallback: use ps command
-        import subprocess
-
-        result = subprocess.run(
-            ["ps", "-o", "rss=", "-p", str(pid)],
-            capture_output=True,
-            text=True,
-        )
-        return int(result.stdout.strip()) / 1024  # ps gives KB
+    # Fallback: use ps command
+    result = subprocess.run(
+        ["ps", "-o", "rss=", "-p", str(pid)],
+        capture_output=True,
+        text=True,
+    )
+    return int(result.stdout.strip()) / 1024  # ps gives KB
 
 
 def find_server_pid(port):
     """Find the PID of the lactor server on the given port."""
-    import subprocess
-
     result = subprocess.run(
         ["lsof", "-ti", f":{port}"],
         capture_output=True,

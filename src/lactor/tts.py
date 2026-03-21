@@ -49,7 +49,10 @@ async def stream_tts(text: str, voice: str) -> AsyncIterator[dict[str, Any]]:
     search_from = 0
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":
-            yield {"type": "audio", "data": base64.b64encode(chunk["data"]).decode("ascii")}
+            yield {
+                "type": "audio",
+                "data": base64.b64encode(chunk["data"]).decode("ascii"),
+            }
         elif chunk["type"] == "WordBoundary":
             word_text = chunk["text"]
             char_offset = text.find(word_text, search_from)

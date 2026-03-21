@@ -33,7 +33,11 @@ async def test_voices_maps_fields_correctly():
         async with AsyncClient(transport=transport, base_url="http://localhost") as client:
             resp = await client.get("/voices")
             voices = resp.json()
-            assert voices[0] == {"name": "en-US-AriaNeural", "locale": "en-US", "gender": "Female"}
+            assert voices[0] == {
+                "name": "en-US-AriaNeural",
+                "locale": "en-US",
+                "gender": "Female",
+            }
             assert voices[2] == {
                 "name": "zh-CN-XiaoxiaoNeural",
                 "locale": "zh-CN",
