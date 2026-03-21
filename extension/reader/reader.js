@@ -2,6 +2,7 @@ import { splitIntoParagraphs, renderParagraphs } from "./components/normalizer.j
 import { HighlightEngine } from "./components/highlight.js";
 import { Player } from "./components/player.js";
 import { Controls } from "./components/controls.js";
+import { PrefetchScheduler } from "./components/scheduler.js";
 
 const DEFAULT_PORT = 7890;
 
@@ -12,6 +13,7 @@ let voice = "en-US-AriaNeural";
 
 const player = new Player();
 const highlight = new HighlightEngine();
+let scheduler = null;
 
 const contentEl = document.getElementById("content");
 const loadingEl = document.getElementById("loading");
@@ -21,13 +23,10 @@ const errorEl = document.getElementById("error");
 let bgPort = null;
 let bgConnected = false;
 
-// Buffers: paraId -> { audioChunks: [], wordEvents: [], done: bool, buffer: AudioBuffer|null }
+// Buffers: paraIndex -> { audioChunks: [], wordEvents: [], done: bool }
 const buffers = new Map();
 
-// Track which conn (0 or 1) is playing and which is prefetching
-let playingConn = 0;
-
-// Pending speak requests: paraId -> { resolve }
+// Pending speak requests: paraIndex -> { resolve }
 const pendingRequests = new Map();
 
 const controls = new Controls({
@@ -43,16 +42,13 @@ const controls = new Controls({
 });
 
 async function init() {
-  // Send ready handshake to parent
   window.parent.postMessage({ type: "lactor-ready" }, "*");
 
-  // Get port from storage
   try {
     const result = await browser.storage.local.get("port");
     if (result.port) backendPort = result.port;
   } catch {}
 
-  // Get tabId from URL params
   const params = new URLSearchParams(location.search);
   const tabId = parseInt(params.get("tabId"), 10);
   if (isNaN(tabId)) {
@@ -60,7 +56,6 @@ async function init() {
     return;
   }
 
-  // Fetch content from background
   loadingEl.style.display = "block";
   try {
     const resp = await browser.runtime.sendMessage({ type: "getContent", tabId });
@@ -69,7 +64,6 @@ async function init() {
       return;
     }
 
-    // Parse and render
     paragraphs = splitIntoParagraphs(resp.data.content);
     if (paragraphs.length === 0) {
       showError("Could not extract readable text from this page.");
@@ -85,11 +79,10 @@ async function init() {
     renderParagraphs(contentEl, paragraphs);
     loadingEl.style.display = "none";
 
-    // Load voices
     await controls.loadVoices(backendPort);
     if (controls.selectedVoice) voice = controls.selectedVoice;
 
-    // Connect to background WebSocket proxy
+    scheduler = new PrefetchScheduler(paragraphs, 3);
     connectToBg();
   } catch (err) {
     showError(`Failed to load content: ${err.message}`);
@@ -102,6 +95,8 @@ function showError(msg) {
   errorEl.style.display = "block";
 }
 
+// ── Port communication ──────────────────────────────────────────
+
 function connectToBg() {
   bgPort = browser.runtime.connect({ name: "lactor-tts" });
 
@@ -110,20 +105,18 @@ function connectToBg() {
       bgConnected = true;
       return;
     }
-
     if (msg.type === "ws-error") {
       console.warn(`Lactor: WS conn ${msg.conn} error: ${msg.message}`);
       return;
     }
 
-    // TTS data messages: audio, word, done, error
-    const paraId = msg.id;
-    if (!paraId) return;
+    const paraIndex = parseParaIndex(msg.id);
+    if (paraIndex === null) return;
 
-    if (!buffers.has(paraId)) {
-      buffers.set(paraId, { audioChunks: [], wordEvents: [], done: false, buffer: null });
+    if (!buffers.has(paraIndex)) {
+      buffers.set(paraIndex, { audioChunks: [], wordEvents: [], done: false });
     }
-    const buf = buffers.get(paraId);
+    const buf = buffers.get(paraIndex);
 
     if (msg.type === "audio") {
       buf.audioChunks.push(msg.data);
@@ -131,19 +124,13 @@ function connectToBg() {
       buf.wordEvents.push(msg);
     } else if (msg.type === "done") {
       buf.done = true;
-      const pending = pendingRequests.get(paraId);
-      if (pending) {
-        pending.resolve();
-        pendingRequests.delete(paraId);
-      }
+      scheduler.onFetchComplete(paraIndex);
+      resolvePending(paraIndex);
+      tryPrefetch(); // check if we should fetch more
     } else if (msg.type === "error") {
-      console.error(`Lactor: TTS error for ${paraId}: ${msg.message}`);
+      console.error(`Lactor: TTS error for para ${paraIndex}: ${msg.message}`);
       buf.done = true;
-      const pending = pendingRequests.get(paraId);
-      if (pending) {
-        pending.resolve();
-        pendingRequests.delete(paraId);
-      }
+      resolvePending(paraIndex);
     }
   });
 
@@ -151,46 +138,79 @@ function connectToBg() {
     bgConnected = false;
     bgPort = null;
   });
-
-  // Tell background to establish WebSocket connections
   bgPort.postMessage({ action: "connect", port: backendPort });
 }
 
-function sendSpeak(conn, paraIndex) {
-  const paraId = `para-${paraIndex}`;
-  const text = paragraphs[paraIndex];
-  buffers.set(paraId, { audioChunks: [], wordEvents: [], done: false, buffer: null });
+function parseParaIndex(id) {
+  if (!id || !id.startsWith("para-")) return null;
+  const n = parseInt(id.slice(5), 10);
+  return isNaN(n) ? null : n;
+}
 
-  return new Promise((resolve) => {
-    pendingRequests.set(paraId, { resolve });
+function resolvePending(paraIndex) {
+  const pending = pendingRequests.get(paraIndex);
+  if (pending) {
+    pending.resolve();
+    pendingRequests.delete(paraIndex);
+  }
+}
 
+// ── Prefetch scheduling ─────────────────────────────────────────
+
+function dispatchFetch(fetch) {
+  const paraId = `para-${fetch.index}`;
+  buffers.set(fetch.index, { audioChunks: [], wordEvents: [], done: false });
+
+  const send = () => {
     if (bgPort && bgConnected) {
-      bgPort.postMessage({ action: "speak", conn, id: paraId, text, voice });
+      bgPort.postMessage({
+        action: "speak",
+        conn: fetch.conn,
+        id: paraId,
+        text: fetch.text,
+        voice,
+      });
     } else {
-      // Wait for connection then send
-      const checkReady = () => {
-        if (bgPort && bgConnected) {
-          bgPort.postMessage({ action: "speak", conn, id: paraId, text, voice });
-        } else {
-          setTimeout(checkReady, 100);
-        }
-      };
-      setTimeout(checkReady, 100);
+      setTimeout(send, 100);
     }
+  };
+  send();
+}
+
+function dispatchFetchAndWait(fetch) {
+  dispatchFetch(fetch);
+  return new Promise((resolve) => {
+    pendingRequests.set(fetch.index, { resolve });
   });
 }
+
+function tryPrefetch() {
+  if (!scheduler) return;
+  const remainingMs = getRemainingPlaybackMs();
+  while (scheduler.shouldPrefetch(remainingMs)) {
+    const next = scheduler.getNextFetch();
+    if (!next) break;
+    dispatchFetch(next);
+  }
+}
+
+function getRemainingPlaybackMs() {
+  if (!player.playing || !player._currentBuffer) return 0;
+  const totalMs = player._currentBuffer.duration * 1000;
+  return Math.max(0, totalMs - player.getCurrentTimeMs());
+}
+
+// ── Playback ────────────────────────────────────────────────────
 
 async function handlePlay() {
   if (player.playing) return;
 
-  // If we have a paused buffer, resume
   if (player._currentBuffer) {
     await player.resume();
     highlight.start(() => player.getCurrentTimeMs());
     return;
   }
 
-  // Start from current paragraph
   await playFromParagraph(currentParaIndex);
 }
 
@@ -206,62 +226,47 @@ async function playFromParagraph(paraIndex) {
   }
 
   currentParaIndex = paraIndex;
-  const paraId = `para-${paraIndex}`;
 
-  // Mark paragraph as current
-  document.querySelectorAll("p[data-para]").forEach((p) => {
-    p.classList.remove("current-para");
-  });
+  // Mark paragraph as current in UI
+  document.querySelectorAll("p[data-para]").forEach((p) => p.classList.remove("current-para"));
   const paraEl = document.querySelector(`p[data-para="${paraIndex}"]`);
   if (paraEl) paraEl.classList.add("current-para");
 
-  // Request current paragraph if not already buffered
-  if (!buffers.has(paraId) || !buffers.get(paraId).done) {
-    await sendSpeak(playingConn, paraIndex);
+  // Ensure current paragraph is fetched
+  if (!buffers.has(paraIndex) || !buffers.get(paraIndex).done) {
+    const fetch = scheduler.getNextFetch();
+    if (fetch) await dispatchFetchAndWait(fetch);
   }
 
-  // Start prefetching next paragraph on the other connection
-  const prefetchConn = playingConn === 0 ? 1 : 0;
-  const nextParaIndex = paraIndex + 1;
-  if (nextParaIndex < paragraphs.length) {
-    const nextParaId = `para-${nextParaIndex}`;
-    if (!buffers.has(nextParaId) || !buffers.get(nextParaId).done) {
-      sendSpeak(prefetchConn, nextParaIndex); // fire and forget
-    }
-  }
+  // Trigger adaptive prefetch for upcoming paragraphs
+  tryPrefetch();
 
-  // Decode and play current paragraph
-  const buf = buffers.get(paraId);
+  // Decode and play
+  const buf = buffers.get(paraIndex);
   if (!buf || buf.audioChunks.length === 0) {
-    // Skip empty paragraph (TTS error or empty audio)
     await playFromParagraph(paraIndex + 1);
     return;
   }
 
   try {
     const audioBuffer = await player.decodeAudio(buf.audioChunks);
-    buf.buffer = audioBuffer;
 
-    // Set up highlight
     highlight.loadParagraph(paraIndex);
     highlight.addWordEvents(buf.wordEvents);
 
-    // Play with onEnded callback for next paragraph
     player.play(audioBuffer, async () => {
       highlight.stop();
-      // Mark as played
       if (paraEl) {
         paraEl.classList.remove("current-para");
         paraEl.classList.add("played");
       }
       // Release audio data
       buf.audioChunks = [];
-      buf.buffer = null;
+      scheduler.onPlaybackComplete();
 
-      // Swap connection roles
-      playingConn = playingConn === 0 ? 1 : 0;
+      // Trigger prefetch check after playback advances
+      tryPrefetch();
 
-      // Play next
       if (controls.isPlaying) {
         await playFromParagraph(paraIndex + 1);
       }
@@ -270,10 +275,11 @@ async function playFromParagraph(paraIndex) {
     highlight.start(() => player.getCurrentTimeMs());
   } catch (err) {
     console.error(`Lactor: failed to decode audio for para ${paraIndex}`, err);
-    // Skip to next paragraph
     await playFromParagraph(paraIndex + 1);
   }
 }
+
+// ── Cleanup ─────────────────────────────────────────────────────
 
 function cleanup() {
   player.destroy();
