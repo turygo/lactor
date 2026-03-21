@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Lactor Frontend Memory Benchmark</title>
+  <style>
+    body { font-family: monospace; padding: 20px; max-width: 800px; margin: 0 auto; }
+    #log { white-space: pre-wrap; background: #f5f5f5; padding: 16px; border-radius: 4px; max-height: 600px; overflow-y: auto; }
+    button { padding: 8px 16px; margin: 4px; cursor: pointer; }
+    .pass { color: #137333; } .fail { color: #c5221f; }
+  </style>
+</head>
+<body>
+  <h1>Lactor Frontend Memory Benchmark</h1>
+  <p>This test must be run manually in a browser. Configure port and click Start.</p>
+  <label>Port: <input type="number" id="port" value="7890" min="1024" max="65535"></label>
+  <button id="start">Start Benchmark</button>
+  <button id="stop" disabled>Stop</button>
+  <div id="log"></div>
+
+  <script>
+    const logEl = document.getElementById("log");
+    const startBtn = document.getElementById("start");
+    const stopBtn = document.getElementById("stop");
+    let running = false;
+
+    function log(msg, cls) {
+      const line = document.createElement("div");
+      line.textContent = `[${new Date().toISOString().slice(11,19)}] ${msg}`;
+      if (cls) line.className = cls;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function getMemoryMB() {
+      if (performance.memory) {
+        return (performance.memory.usedJSHeapSize / (1024 * 1024)).toFixed(1);
+      }
+      return "N/A";
+    }
+
+    startBtn.addEventListener("click", async () => {
+      running = true;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+
+      const port = document.getElementById("port").value;
+      const url = `ws://localhost:${port}/tts`;
+      const ctx = new AudioContext();
+
+      log(`Connecting to ${url}...`);
+      log(`Initial heap: ${getMemoryMB()} MB`);
+
+      const testText = "The quick brown fox jumps over the lazy dog. ".repeat(10);
+      const paragraphs = 20;
+      let peakMB = parseFloat(getMemoryMB()) || 0;
+
+      for (let i = 0; i < paragraphs && running; i++) {
+        const ws = new WebSocket(url);
+        const paraId = `bench-${i}`;
+        const audioChunks = [];
+
+        await new Promise((resolve, reject) => {
+          ws.onopen = () => {
+            ws.send(JSON.stringify({
+              action: "speak", id: paraId,
+              text: testText, voice: "en-US-AriaNeural",
+            }));
+          };
+          ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            if (msg.type === "audio") audioChunks.push(msg.data);
+            if (msg.type === "done") resolve();
+          };
+          ws.onerror = reject;
+        });
+
+        // Decode audio
+        const parts = audioChunks.map(b64 => {
+          const bin = atob(b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let j = 0; j < bin.length; j++) bytes[j] = bin.charCodeAt(j);
+          return bytes;
+        });
+        const total = parts.reduce((s, p) => s + p.length, 0);
+        const combined = new Uint8Array(total);
+        let off = 0;
+        for (const p of parts) { combined.set(p, off); off += p.length; }
+
+        try {
+          const buffer = await ctx.decodeAudioData(combined.buffer.slice(0));
+          const currentMB = parseFloat(getMemoryMB()) || 0;
+          peakMB = Math.max(peakMB, currentMB);
+          log(`Para ${i}: decoded ${buffer.duration.toFixed(1)}s, heap=${getMemoryMB()} MB`);
+        } catch (e) {
+          log(`Para ${i}: decode FAILED - ${e.message}`, "fail");
+        }
+
+        ws.close();
+      }
+
+      const finalMB = getMemoryMB();
+      log(`\nFinal heap: ${finalMB} MB (peak: ${peakMB.toFixed(1)} MB)`);
+      log(peakMB < 150 ? "Peak < 150MB: PASS" : "Peak < 150MB: FAIL", peakMB < 150 ? "pass" : "fail");
+
+      await ctx.close();
+      running = false;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+    });
+
+    stopBtn.addEventListener("click", () => { running = false; });
+  </script>
+</body>
+</html>
