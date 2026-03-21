@@ -3,6 +3,7 @@ import { HighlightEngine } from "./components/highlight.js";
 import { Player } from "./components/player.js";
 import { Controls } from "./components/controls.js";
 import { PrefetchScheduler } from "./components/scheduler.js";
+import { Logger, isDebugMode } from "./components/logger.js";
 
 const DEFAULT_PORT = 7890;
 
@@ -14,6 +15,7 @@ let voice = "en-US-AriaNeural";
 const player = new Player();
 const highlight = new HighlightEngine();
 let scheduler = null;
+let log = null; // set in init()
 
 const contentEl = document.getElementById("content");
 const loadingEl = document.getElementById("loading");
@@ -42,6 +44,11 @@ const controls = new Controls({
 });
 
 async function init() {
+  const debug = await isDebugMode();
+  const logger = new Logger(debug);
+  log = logger.scope("reader");
+  log.log("init, debug =", debug);
+
   window.parent.postMessage({ type: "lactor-ready" }, "*");
 
   try {
@@ -103,10 +110,11 @@ function connectToBg() {
   bgPort.onMessage.addListener((msg) => {
     if (msg.type === "connected") {
       bgConnected = true;
+      log.log("background WS connected");
       return;
     }
     if (msg.type === "ws-error") {
-      console.warn(`Lactor: WS conn ${msg.conn} error: ${msg.message}`);
+      log.warn(`WS conn ${msg.conn} error: ${msg.message}`);
       return;
     }
 
@@ -124,11 +132,14 @@ function connectToBg() {
       buf.wordEvents.push(msg);
     } else if (msg.type === "done") {
       buf.done = true;
+      log.log(
+        `para ${paraIndex} fetch done, chunks=${buf.audioChunks.length}, words=${buf.wordEvents.length}`
+      );
       scheduler.onFetchComplete(paraIndex);
       resolvePending(paraIndex);
-      tryPrefetch(); // check if we should fetch more
+      tryPrefetch();
     } else if (msg.type === "error") {
-      console.error(`Lactor: TTS error for para ${paraIndex}: ${msg.message}`);
+      log.error(`TTS error para ${paraIndex}: ${msg.message}`);
       buf.done = true;
       resolvePending(paraIndex);
     }
@@ -159,6 +170,9 @@ function resolvePending(paraIndex) {
 
 function dispatchFetch(fetch) {
   const paraId = `para-${fetch.index}`;
+  log.log(
+    `dispatch fetch: para ${fetch.index} on conn ${fetch.conn}, text=${fetch.text.length} chars`
+  );
   buffers.set(fetch.index, { audioChunks: [], wordEvents: [], done: false });
 
   const send = () => {
@@ -171,6 +185,7 @@ function dispatchFetch(fetch) {
         voice,
       });
     } else {
+      log.log(`dispatch fetch: waiting for bg connection...`);
       setTimeout(send, 100);
     }
   };
@@ -185,18 +200,21 @@ function dispatchFetch(fetch) {
  */
 function ensureBuffered(paraIndex) {
   if (buffers.has(paraIndex) && buffers.get(paraIndex).done) {
+    log.log(`ensureBuffered: para ${paraIndex} already done`);
     return Promise.resolve();
   }
 
   // Not dispatched yet — dispatch it now
   if (!buffers.has(paraIndex)) {
+    log.log(`ensureBuffered: para ${paraIndex} not dispatched, dispatching now`);
     const fetch = scheduler.getNextFetch();
     if (fetch) dispatchFetch(fetch);
+  } else {
+    log.log(`ensureBuffered: para ${paraIndex} in-flight, waiting for done`);
   }
 
   // Wait for done event (covers both in-flight and just-dispatched)
   return new Promise((resolve) => {
-    // Double-check after microtask in case it completed
     if (buffers.has(paraIndex) && buffers.get(paraIndex).done) {
       resolve();
       return;
@@ -242,11 +260,13 @@ async function handlePause() {
 
 async function playFromParagraph(paraIndex) {
   if (paraIndex >= paragraphs.length) {
+    log.log("all paragraphs finished");
     controls.setPlaying(false);
     return;
   }
 
   currentParaIndex = paraIndex;
+  log.log(`playFromParagraph(${paraIndex}/${paragraphs.length - 1})`);
 
   // Mark paragraph as current in UI
   document.querySelectorAll("p[data-para]").forEach((p) => p.classList.remove("current-para"));
@@ -262,27 +282,29 @@ async function playFromParagraph(paraIndex) {
   // Decode and play
   const buf = buffers.get(paraIndex);
   if (!buf || buf.audioChunks.length === 0) {
+    log.warn(`para ${paraIndex} has no audio chunks, skipping`);
     await playFromParagraph(paraIndex + 1);
     return;
   }
 
   try {
+    log.log(`para ${paraIndex} decoding ${buf.audioChunks.length} chunks...`);
     const audioBuffer = await player.decodeAudio(buf.audioChunks);
+    log.log(`para ${paraIndex} decoded, duration=${audioBuffer.duration.toFixed(2)}s, playing`);
 
     highlight.loadParagraph(paraIndex);
     highlight.addWordEvents(buf.wordEvents);
 
     player.play(audioBuffer, async () => {
+      log.log(`para ${paraIndex} playback ended, isPlaying=${controls.isPlaying}`);
       highlight.stop();
       if (paraEl) {
         paraEl.classList.remove("current-para");
         paraEl.classList.add("played");
       }
-      // Release audio data
       buf.audioChunks = [];
       scheduler.onPlaybackComplete();
 
-      // Trigger prefetch check after playback advances
       tryPrefetch();
 
       if (controls.isPlaying) {
@@ -292,7 +314,7 @@ async function playFromParagraph(paraIndex) {
 
     highlight.start(() => player.getCurrentTimeMs());
   } catch (err) {
-    console.error(`Lactor: failed to decode audio for para ${paraIndex}`, err);
+    log.error(`decode failed para ${paraIndex}:`, err);
     await playFromParagraph(paraIndex + 1);
   }
 }

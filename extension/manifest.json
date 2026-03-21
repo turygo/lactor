@@ -3,7 +3,7 @@
   "name": "Lactor",
   "version": "0.1.0",
   "description": "Immersive web article reader with synchronized TTS",
-  "permissions": ["activeTab", "scripting", "storage"],
+  "permissions": ["activeTab", "scripting", "storage", "management"],
   "host_permissions": [
     "http://localhost/*",
     "http://127.0.0.1/*",
