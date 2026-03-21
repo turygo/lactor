@@ -1,7 +1,7 @@
 import argparse
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -46,6 +46,12 @@ def create_app(extension_id: str | None = None, dev: bool = False) -> FastAPI:
     @app.get("/health")
     async def health():
         return {"status": "ok"}
+
+    from lactor.ws_handler import handle_tts_websocket
+
+    @app.websocket("/tts")
+    async def tts_endpoint(websocket: WebSocket):
+        await handle_tts_websocket(websocket, app.state.allowed_origins, app.state.dev)
 
     return app
 
