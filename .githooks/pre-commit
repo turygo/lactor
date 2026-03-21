@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ── Python: format staged files ──────────────────────────────────────────────
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+if [ -n "$STAGED_PY" ]; then
+  echo "[pre-commit] ruff format: formatting staged Python files..."
+  echo "$STAGED_PY" | xargs ruff format
+  echo "$STAGED_PY" | xargs git add
+fi
+
+# ── JavaScript: format staged files ──────────────────────────────────────────
+STAGED_JS=$(git diff --cached --name-only --diff-filter=ACM | grep '\.js$' || true)
+if [ -n "$STAGED_JS" ]; then
+  echo "[pre-commit] prettier: formatting staged JS files..."
+  echo "$STAGED_JS" | xargs npx prettier --write
+  echo "$STAGED_JS" | xargs git add
+fi
+
+# ── Python: lint staged files ────────────────────────────────────────────────
+if [ -n "$STAGED_PY" ]; then
+  echo "[pre-commit] ruff check: linting staged Python files..."
+  echo "$STAGED_PY" | xargs ruff check
+else
+  echo "[pre-commit] ruff check: no staged Python files, skipping."
+fi
+
+# ── JavaScript: lint staged files ────────────────────────────────────────────
+if [ -n "$STAGED_JS" ]; then
+  echo "[pre-commit] eslint: linting staged JS files..."
+  echo "$STAGED_JS" | xargs npx eslint --no-warn-ignored
+else
+  echo "[pre-commit] eslint: no staged JS files, skipping."
+fi
+
+# ── Python: run all tests ────────────────────────────────────────────────────
+echo "[pre-commit] pytest: running Python tests..."
+LACTOR_MOCK_TTS=1 pytest -q
+
+# ── JavaScript: run all *.test.js files ──────────────────────────────────────
+JS_TESTS=$(find extension -name "*.test.js" 2>/dev/null || true)
+if [ -n "$JS_TESTS" ]; then
+  echo "[pre-commit] node --test: running JS tests..."
+  node --test $JS_TESTS
+else
+  echo "[pre-commit] node --test: no JS test files found, skipping."
+fi
+
+echo "[pre-commit] all checks passed."
