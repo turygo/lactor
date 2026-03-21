@@ -121,6 +121,7 @@ function connectToBg() {
     }
     if (msg.type === "ws-error") {
       log.warn(`WS conn ${msg.conn} error: ${msg.message}`);
+      bgConnected = false; // mark as disconnected so dispatch triggers reconnect
       return;
     }
 
@@ -174,6 +175,13 @@ function resolvePending(paraIndex) {
 
 // ── Prefetch scheduling ─────────────────────────────────────────
 
+function reconnectBg() {
+  if (!bgPort) return;
+  log.log("requesting background WS reconnect");
+  if (scheduler) scheduler.resetConnections();
+  bgPort.postMessage({ action: "connect", port: backendPort });
+}
+
 function dispatchFetch(fetch) {
   const paraId = `para-${fetch.index}`;
   log.log(
@@ -181,6 +189,7 @@ function dispatchFetch(fetch) {
   );
   buffers.set(fetch.index, { audioChunks: [], wordEvents: [], done: false });
 
+  let retries = 0;
   const send = () => {
     if (bgPort && bgConnected) {
       bgPort.postMessage({
@@ -190,8 +199,17 @@ function dispatchFetch(fetch) {
         text: fetch.text,
         voice,
       });
-    } else {
-      log.log(`dispatch fetch: waiting for bg connection...`);
+    } else if (bgPort) {
+      retries++;
+      if (retries === 1) {
+        log.log(`dispatch fetch: connection lost, triggering reconnect`);
+        reconnectBg();
+      }
+      if (retries > 50) {
+        // 5 seconds max
+        log.error(`dispatch fetch: gave up after ${retries} retries`);
+        return;
+      }
       setTimeout(send, 100);
     }
   };
@@ -249,6 +267,12 @@ function getRemainingPlaybackMs() {
 
 async function handlePlay() {
   if (player.playing) return;
+
+  // Reconnect if WS dropped during pause
+  if (!bgConnected && bgPort) {
+    log.log("play: reconnecting WS before resume");
+    reconnectBg();
+  }
 
   if (player._currentBuffer) {
     await player.resume();

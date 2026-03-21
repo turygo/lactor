@@ -200,4 +200,60 @@ describe("PrefetchScheduler", () => {
       assert.equal(s._bufferedCount, 0);
     });
   });
+
+  describe("resetConnections (reconnect scenario)", () => {
+    it("clears in-flight state on both connections", () => {
+      const s = new PrefetchScheduler(makeParagraphs(10, 20, 30), 3);
+      s.getNextFetch(); // conn 0 busy
+      s.getNextFetch(); // conn 1 busy
+      assert.equal(s._freeConn(), -1); // both busy
+
+      s.resetConnections();
+
+      assert.equal(s._freeConn(), 0); // conn 0 free
+      assert.equal(s._connBusy[0], null);
+      assert.equal(s._connBusy[1], null);
+    });
+
+    it("preserves metrics and buffered count", () => {
+      const s = new PrefetchScheduler(makeParagraphs(10, 20, 30), 3);
+      s.metrics.record(100, 500);
+      s._bufferedCount = 1;
+      s.getNextFetch(); // conn 0 busy
+
+      s.resetConnections();
+
+      assert.equal(s.metrics.getRate(), 5); // preserved
+      assert.equal(s._bufferedCount, 1); // preserved
+    });
+
+    it("rewinds nextFetchIndex for in-flight paragraphs", () => {
+      const s = new PrefetchScheduler(makeParagraphs(10, 20, 30, 40), 3);
+      s.getNextFetch(); // para 0, conn 0
+      s.getNextFetch(); // para 1, conn 1
+      // para 0 completes
+      s._fetchStartTimes.set(0, Date.now() - 100);
+      s.onFetchComplete(0);
+      // para 1 still in-flight, nextFetchIndex = 2
+      assert.equal(s._nextFetchIndex, 2);
+
+      s.resetConnections();
+
+      // para 1 was in-flight → needs re-fetch, so nextFetchIndex rewinds to 1
+      assert.equal(s._nextFetchIndex, 1);
+      const f = s.getNextFetch();
+      assert.equal(f.index, 1); // re-fetches para 1
+    });
+
+    it("allows scheduling after reconnect", () => {
+      const s = new PrefetchScheduler(makeParagraphs(10, 20, 30), 3);
+      s.getNextFetch(); // conn 0
+      s.getNextFetch(); // conn 1
+      assert.equal(s.shouldPrefetch(0), false); // both busy
+
+      s.resetConnections();
+
+      assert.equal(s.shouldPrefetch(0), true); // connections free, can fetch
+    });
+  });
 });

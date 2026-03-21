@@ -124,6 +124,14 @@ browser.runtime.onConnect.addListener((port) => {
 
   port.onMessage.addListener((msg) => {
     if (msg.action === "connect") {
+      // Close existing connections before reconnecting
+      for (let i = 0; i < 2; i++) {
+        if (wsConns[i] && wsConns[i].readyState <= WebSocket.OPEN) {
+          wsConns[i].onclose = null; // prevent reconnect loop
+          wsConns[i].close();
+        }
+        wsConns[i] = null;
+      }
       wsUrl = `ws://127.0.0.1:${msg.port}/tts`;
       reconnectCounts = [0, 0];
       createWS(0);

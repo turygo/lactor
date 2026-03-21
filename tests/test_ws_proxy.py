@@ -238,3 +238,80 @@ async def test_independent_connections_no_crosstalk(server):
     assert all(m["id"] == "isolated-1" for m in msgs)
 
     await proxy.close()
+
+
+@pytest.mark.asyncio
+async def test_reconnect_after_disconnect(server):
+    """Simulate pause/resume: connections drop, re-establish, continue working."""
+    proxy = BackgroundProxy()
+    await proxy.connect(SERVER_URL)
+
+    # Play para 0 successfully
+    await proxy.send_speak(0, "pre-dc-0", "Before disconnect")
+    msgs = await proxy.recv_all_until_done(0, "pre-dc-0")
+    assert msgs[-1]["type"] == "done"
+
+    # Simulate connection drop (like pause timeout)
+    await proxy.close()
+
+    # Re-establish connections (like background.js reconnect)
+    await proxy.connect(SERVER_URL)
+
+    # Should work normally after reconnect
+    await proxy.send_speak(0, "post-dc-0", "After reconnect first")
+    msgs = await proxy.recv_all_until_done(0, "post-dc-0")
+    assert msgs[-1]["type"] == "done"
+    types = {m["type"] for m in msgs}
+    assert types >= {"audio", "word", "done"}
+
+    await proxy.send_speak(1, "post-dc-1", "After reconnect second")
+    msgs = await proxy.recv_all_until_done(1, "post-dc-1")
+    assert msgs[-1]["type"] == "done"
+
+    await proxy.close()
+
+
+@pytest.mark.asyncio
+async def test_reconnect_preserves_dual_connection_pattern(server):
+    """After reconnect, dual-connection prefetch pattern still works."""
+    import asyncio
+
+    proxy = BackgroundProxy()
+    await proxy.connect(SERVER_URL)
+
+    # Use both connections
+    await proxy.send_speak(0, "r-para-0", "First before drop")
+    await proxy.recv_all_until_done(0, "r-para-0")
+
+    # Drop and reconnect
+    await proxy.close()
+    await proxy.connect(SERVER_URL)
+
+    # Concurrent speaks on both connections (like prefetch pattern)
+    await proxy.send_speak(0, "r-para-1", "After reconnect conn zero")
+    await proxy.send_speak(1, "r-para-2", "After reconnect conn one")
+
+    task_0 = asyncio.create_task(proxy.recv_all_until_done(0, "r-para-1"))
+    task_1 = asyncio.create_task(proxy.recv_all_until_done(1, "r-para-2"))
+    msgs_0, msgs_1 = await asyncio.gather(task_0, task_1)
+
+    assert msgs_0[-1]["type"] == "done"
+    assert msgs_1[-1]["type"] == "done"
+    assert all(m["id"] == "r-para-1" for m in msgs_0)
+    assert all(m["id"] == "r-para-2" for m in msgs_1)
+
+    await proxy.close()
+
+
+@pytest.mark.asyncio
+async def test_multiple_reconnect_cycles(server):
+    """Survive multiple disconnect/reconnect cycles."""
+    proxy = BackgroundProxy()
+
+    for cycle in range(3):
+        await proxy.connect(SERVER_URL)
+        para_id = f"cycle-{cycle}"
+        await proxy.send_speak(0, para_id, f"Cycle {cycle} text")
+        msgs = await proxy.recv_all_until_done(0, para_id)
+        assert msgs[-1]["type"] == "done"
+        await proxy.close()

@@ -103,4 +103,21 @@ export class PrefetchScheduler {
   onPlaybackComplete() {
     this._bufferedCount = Math.max(0, this._bufferedCount - 1);
   }
+
+  /**
+   * Reset connection state after WS reconnect.
+   * Clears busy flags, rewinds nextFetchIndex for any in-flight paragraphs
+   * that were lost. Preserves metrics and buffered count.
+   */
+  resetConnections() {
+    // Rewind nextFetchIndex for any in-flight (lost) paragraphs
+    const inFlightIndices = this._connBusy.filter((v) => v !== null);
+    if (inFlightIndices.length > 0) {
+      const minInFlight = Math.min(...inFlightIndices);
+      this._nextFetchIndex = Math.min(this._nextFetchIndex, minInFlight);
+    }
+
+    this._connBusy = [null, null];
+    this._fetchStartTimes.clear();
+  }
 }
