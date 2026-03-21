@@ -65,5 +65,6 @@ export async function isDebugMode() {
       return self.installType === "development";
     }
   } catch {}
-  return false;
+  // API unavailable — likely a temporary add-on, default to enabled
+  return true;
 }

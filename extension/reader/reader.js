@@ -44,10 +44,16 @@ const controls = new Controls({
 });
 
 async function init() {
-  const debug = await isDebugMode();
+  let debug = false;
+  try {
+    debug = await isDebugMode();
+  } catch (e) {
+    console.error("[Lactor] isDebugMode failed:", e);
+    debug = true; // fallback to enabled
+  }
   const logger = new Logger(debug);
   log = logger.scope("reader");
-  log.log("init, debug =", debug);
+  console.log("[Lactor] reader init, debug =", debug); // always log this one
 
   window.parent.postMessage({ type: "lactor-ready" }, "*");
 
