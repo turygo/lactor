@@ -47,6 +47,13 @@ def create_app(extension_id: str | None = None, dev: bool = False) -> FastAPI:
     async def health():
         return {"status": "ok"}
 
+    import edge_tts
+
+    @app.get("/voices")
+    async def list_voices():
+        voices = await edge_tts.list_voices()
+        return [{"name": v["Name"], "locale": v["Locale"], "gender": v["Gender"]} for v in voices]
+
     from lactor.ws_handler import handle_tts_websocket
 
     @app.websocket("/tts")
