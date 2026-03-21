@@ -1,10 +1,14 @@
 import argparse
 
+import edge_tts
 import uvicorn
 from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+
+from lactor.ws_handler import handle_tts_websocket
 
 
 class OriginMiddleware(BaseHTTPMiddleware):
@@ -41,20 +45,29 @@ def create_app(extension_id: str | None = None, dev: bool = False) -> FastAPI:
     app.state.extension_id = extension_id
     app.state.dev = dev
     app.state.allowed_origins = allowed_origins
+    # CORS middleware — needed for browser extension requests
+    cors_origins = list(allowed_origins) if allowed_origins else []
+    if dev:
+        cors_origins = ["*"]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.add_middleware(OriginMiddleware, allowed_origins=allowed_origins, dev=dev)
 
     @app.get("/health")
     async def health():
         return {"status": "ok"}
 
-    import edge_tts
-
     @app.get("/voices")
     async def list_voices():
         voices = await edge_tts.list_voices()
-        return [{"name": v["Name"], "locale": v["Locale"], "gender": v["Gender"]} for v in voices]
-
-    from lactor.ws_handler import handle_tts_websocket
+        return [
+            {"name": v["Name"], "locale": v["Locale"], "gender": v["Gender"]}
+            for v in voices
+        ]
 
     @app.websocket("/tts")
     async def tts_endpoint(websocket: WebSocket):
@@ -73,7 +86,7 @@ def cli():
 
     if args.command == "serve":
         app = create_app(extension_id=args.extension_id, dev=args.dev)
-        uvicorn.run(app, host="127.0.0.1", port=args.port)
+        uvicorn.run(app, host="127.0.0.1", port=args.port, http="h11")
 
 
 if __name__ == "__main__":

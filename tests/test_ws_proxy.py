@@ -8,9 +8,13 @@ we simulate what background.js does: open two WS connections,
 relay speak/cancel commands, and verify messages flow correctly.
 """
 
+import asyncio
 import json
 import os
+import subprocess
+import time
 
+import httpx
 import pytest
 from websockets.asyncio.client import connect
 
@@ -20,11 +24,6 @@ SERVER_URL = "ws://localhost:17892/tts"
 @pytest.fixture(scope="module")
 def server():
     """Start server in background for proxy tests, with mocked edge-tts."""
-    import subprocess
-    import time
-
-    import httpx
-
     env = os.environ.copy()
     env["LACTOR_MOCK_TTS"] = "1"
     proc = subprocess.Popen(
@@ -134,8 +133,6 @@ async def test_dual_connection_relay(server):
 @pytest.mark.asyncio
 async def test_prefetch_pattern(server):
     """Simulate the dual-WS prefetch: play on conn 0, prefetch on conn 1 concurrently."""
-    import asyncio
-
     proxy = BackgroundProxy()
     await proxy.connect(SERVER_URL)
 
@@ -202,7 +199,6 @@ async def test_connection_swap_pattern(server):
     for i in range(4):
         prefetch_conn = 1 - playing_conn
         para_id = f"swap-{i}"
-        next_para_id = f"swap-{i + 1}"
 
         # Speak on playing connection
         await proxy.send_speak(playing_conn, para_id, f"Paragraph {i} text")
@@ -274,8 +270,6 @@ async def test_reconnect_after_disconnect(server):
 @pytest.mark.asyncio
 async def test_reconnect_preserves_dual_connection_pattern(server):
     """After reconnect, dual-connection prefetch pattern still works."""
-    import asyncio
-
     proxy = BackgroundProxy()
     await proxy.connect(SERVER_URL)
 
