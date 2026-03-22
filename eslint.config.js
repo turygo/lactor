@@ -37,4 +37,15 @@ export default [
       },
     },
   },
+  {
+    // Benchmark scripts run under Node.js
+    files: ["benchmark/**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
 ];
