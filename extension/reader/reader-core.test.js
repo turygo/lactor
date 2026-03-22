@@ -556,6 +556,21 @@ describe("createReader", () => {
       // Should resolve immediately
       await reader._ensureBuffered(0);
     });
+
+    it("rejects pending promises on cleanup", async () => {
+      const deps = makeDeps();
+      const reader = createReader(deps);
+      await reader.init();
+      deps._mocks.mockPort._fire({ type: "connected" });
+
+      // Start ensureBuffered without resolving it
+      const promise = reader._ensureBuffered(0);
+
+      // Cleanup should reject the pending promise
+      reader.cleanup();
+
+      await assert.rejects(promise, { message: "cleanup" });
+    });
   });
 
   describe("playFromParagraph", () => {
