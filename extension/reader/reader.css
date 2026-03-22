@@ -65,20 +65,76 @@ article p {
   margin-bottom: 16px;
 }
 
-article p span {
+article [data-para] span {
   transition: background-color 0.1s ease;
   border-radius: 2px;
   padding: 0 1px;
 }
 
-article p span.active {
+article [data-para] span.active {
   background-color: #fef08a;
 }
 
-article p.current-para {
+article [data-para].current-para {
   /* subtle indicator for currently playing paragraph */
 }
 
-article p.played {
+article [data-para].played {
   opacity: 0.6;
+}
+
+/* Non-text segment styles */
+article [data-segment-type="code"] {
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+article [data-segment-type="code"] pre {
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 12px 16px;
+  font-family: 'Menlo', 'Consolas', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+article [data-segment-type="table"] {
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+article [data-segment-type="table"] table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 16px;
+}
+
+article [data-segment-type="table"] th,
+article [data-segment-type="table"] td {
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+article [data-segment-type="image"] {
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+article [data-segment-type="image"] img {
+  max-width: 100%;
+  height: auto;
+}
+
+article [data-segment-type="formula"] {
+  margin-bottom: 16px;
+  overflow-x: auto;
+  text-align: center;
+}
+
+/* Whole-segment highlight for non-text segments */
+article [data-segment-type]:not([data-segment-type="text"]).active {
+  outline: 2px solid #fef08a;
+  border-radius: 4px;
 }

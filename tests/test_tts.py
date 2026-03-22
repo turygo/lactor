@@ -45,10 +45,7 @@ async def test_stream_tts_produces_audio_and_words():
                 audio_chunks.append(event["data"])
             elif event["type"] == "word":
                 word_events.append(event)
-                assert all(
-                    k in event
-                    for k in ("charOffset", "charLength", "offset", "duration")
-                )
+                assert all(k in event for k in ("charOffset", "charLength", "offset", "duration"))
             elif event["type"] == "done":
                 got_done = True
         assert len(audio_chunks) > 0 and len(word_events) == 2 and got_done
@@ -70,8 +67,6 @@ async def test_stream_tts_charoffset_tracks_position():
     with patch("lactor.tts.edge_tts.Communicate") as MockComm:
         MockComm.return_value.stream = _fake_communicate_stream
         words = [
-            e
-            async for e in stream_tts("Hello world", "en-US-AriaNeural")
-            if e["type"] == "word"
+            e async for e in stream_tts("Hello world", "en-US-AriaNeural") if e["type"] == "word"
         ]
         assert words[0]["charOffset"] == 0 and words[1]["charOffset"] == 6

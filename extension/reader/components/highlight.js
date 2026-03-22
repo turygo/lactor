@@ -12,6 +12,8 @@ export class HighlightEngine {
     this._rafId = null;
     this._getTime = null; // function returning current playback time in ms
     this._paraStartTime = 0;
+    this._paraEl = null;
+    this._isWholeSegment = false;
   }
 
   /**
@@ -20,14 +22,29 @@ export class HighlightEngine {
    */
   loadParagraph(paraIndex) {
     this.stop();
-    const paraEl = document.querySelector(`p[data-para="${paraIndex}"]`);
+    this._clearActive();
+    this._paraEl = null;
+    this._isWholeSegment = false;
+
+    const paraEl = document.querySelector(`[data-para="${paraIndex}"]`);
     if (!paraEl) return;
 
-    this._spans = Array.from(paraEl.querySelectorAll("span[data-char-offset]"));
-    this._offsets = this._spans.map((s) => parseInt(s.dataset.charOffset, 10));
+    this._paraEl = paraEl;
+    const segType = paraEl.dataset.segmentType;
+
+    if (segType && segType !== "text") {
+      // Non-text segment: highlight the whole container
+      this._isWholeSegment = true;
+      this._spans = [];
+      this._offsets = [];
+    } else {
+      this._isWholeSegment = false;
+      this._spans = Array.from(paraEl.querySelectorAll("span[data-char-offset]"));
+      this._offsets = this._spans.map((s) => parseInt(s.dataset.charOffset, 10));
+    }
+
     this._wordEvents = [];
     this._wordIndex = 0;
-    this._clearActive();
   }
 
   /**
@@ -46,6 +63,11 @@ export class HighlightEngine {
   start(getTimeMs) {
     this._getTime = getTimeMs;
     this._wordIndex = 0;
+
+    if (this._isWholeSegment && this._paraEl) {
+      this._paraEl.classList.add("active");
+    }
+
     this._tick();
   }
 
@@ -116,6 +138,9 @@ export class HighlightEngine {
       this._activeSpan.classList.remove("active");
       this._activeSpan = null;
     }
+    if (this._paraEl) {
+      this._paraEl.classList.remove("active");
+    }
   }
 
   reset() {
@@ -125,5 +150,7 @@ export class HighlightEngine {
     this._wordIndex = 0;
     this._spans = [];
     this._offsets = [];
+    this._paraEl = null;
+    this._isWholeSegment = false;
   }
 }
