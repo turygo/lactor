@@ -7,6 +7,7 @@ import { createPipeline } from "./components/pipeline/index.js";
 import { sanitize } from "./components/pipeline/sanitize.js";
 import { structure } from "./components/pipeline/structure.js";
 import { renderSegments } from "./components/render-segments.js";
+import { resolveVoice } from "./components/resolve-voice.js";
 
 const DEFAULT_PORT = 7890;
 
@@ -81,7 +82,7 @@ async function init() {
     }
 
     const pipeline = createPipeline([sanitize, structure]);
-    const ctx = pipeline.run(resp.data.content);
+    const ctx = pipeline.run(resp.data.content, { lang: resp.data.lang || "" });
     const segments = ctx.segments || [];
     paragraphs = segments.map((s) => s.text);
 
@@ -99,8 +100,14 @@ async function init() {
     renderSegments(contentEl, segments);
     loadingEl.style.display = "none";
 
-    await controls.loadVoices(backendPort);
-    if (controls.selectedVoice) voice = controls.selectedVoice;
+    const voices = await controls.loadVoices(backendPort);
+    const resolved = resolveVoice(ctx.lang || "", voices);
+    if (resolved) {
+      voice = resolved;
+      controls.setVoice(resolved);
+    } else if (controls.selectedVoice) {
+      voice = controls.selectedVoice;
+    }
 
     scheduler = new PrefetchScheduler(paragraphs, 3);
     connectToBg();

@@ -7,9 +7,9 @@
 
 export function createPipeline(stages) {
   return {
-    run(html) {
+    run(html, props = {}) {
       const doc = new DOMParser().parseFromString(html, "text/html");
-      const ctx = { doc, body: doc.body };
+      const ctx = { doc, body: doc.body, ...props };
       for (const stage of stages) {
         stage(ctx);
       }

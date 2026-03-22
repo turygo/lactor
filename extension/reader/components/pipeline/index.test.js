@@ -41,4 +41,16 @@ describe("createPipeline", () => {
     assert.ok(ctx.doc);
     assert.ok(ctx.body);
   });
+
+  it("initial props are merged into context before stages run", () => {
+    const capture = (ctx) => {
+      ctx.captured = ctx.lang;
+    };
+
+    const pipeline = createPipeline([capture]);
+    const ctx = pipeline.run("<p>test</p>", { lang: "zh" });
+
+    assert.equal(ctx.lang, "zh");
+    assert.equal(ctx.captured, "zh");
+  });
 });
