@@ -268,12 +268,12 @@ export function createReader(deps) {
       log.log(`ensureBuffered: para ${paraIndex} in-flight, waiting for done`);
     }
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       if (buffers.has(paraIndex) && buffers.get(paraIndex).done) {
         resolve();
         return;
       }
-      pendingRequests.set(paraIndex, { resolve });
+      pendingRequests.set(paraIndex, { resolve, reject });
     });
   }
 
@@ -331,7 +331,11 @@ export function createReader(deps) {
     const paraEl = dom.document.querySelector(`[data-para="${paraIndex}"]`);
     if (paraEl) paraEl.classList.add("current-para");
 
-    await ensureBuffered(paraIndex);
+    try {
+      await ensureBuffered(paraIndex);
+    } catch {
+      return; // cleanup was called, stop playback silently
+    }
     tryPrefetch();
 
     const buf = buffers.get(paraIndex);
@@ -383,6 +387,9 @@ export function createReader(deps) {
       bgPort = null;
     }
     buffers.clear();
+    for (const { reject } of pendingRequests.values()) {
+      reject(new Error("cleanup"));
+    }
     pendingRequests.clear();
   }
 
