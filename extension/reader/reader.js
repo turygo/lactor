@@ -8,6 +8,7 @@ import { sanitize } from "./components/pipeline/sanitize.js";
 import { structure } from "./components/pipeline/structure.js";
 import { renderSegments } from "./components/render-segments.js";
 import { resolveVoice } from "./components/resolve-voice.js";
+import { loadCachedVoices, cacheVoices } from "./components/voice-cache.js";
 
 const DEFAULT_PORT = 7890;
 
@@ -100,12 +101,28 @@ async function init() {
     renderSegments(contentEl, segments);
     loadingEl.style.display = "none";
 
-    const voices = await controls.loadVoices(backendPort);
-    const resolved = resolveVoice(ctx.lang || "", voices);
-    if (resolved) {
-      voice = resolved;
-      controls.setVoice(resolved);
-    } else if (controls.selectedVoice) {
+    // Cache-first voice loading: use cached voices immediately, refresh in background
+    const lang = ctx.lang || "";
+    const cached = await loadCachedVoices(browser.storage.local);
+    if (cached && cached.length > 0) {
+      controls.populateVoices(cached);
+      const resolved = resolveVoice(lang, cached);
+      if (resolved) {
+        voice = resolved;
+        controls.setVoice(resolved);
+      }
+    }
+
+    // Fetch fresh voices (updates UI and cache when done)
+    const fresh = await controls.loadVoices(backendPort);
+    if (fresh.length > 0) {
+      cacheVoices(fresh, browser.storage.local);
+      const resolved = resolveVoice(lang, fresh);
+      if (resolved) {
+        voice = resolved;
+        controls.setVoice(resolved);
+      }
+    } else if (!cached && controls.selectedVoice) {
       voice = controls.selectedVoice;
     }
 
