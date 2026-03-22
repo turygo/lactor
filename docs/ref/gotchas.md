@@ -52,6 +52,16 @@ TTS 返回 error 时，error handler 标记 `buf.done = true` 但未调用 `sche
 
 **解决方案**: `ws-error` 事件设置 `bgConnected = false`；`dispatchFetch` 第一次重试时主动触发 `reconnectBg()`；`handlePlay` 在 resume 前检查并重连。（`7d8e1a6`）
 
+### dispatchFetch 重试 timer 在 cleanup 后仍存活
+
+`dispatchFetch` 在 `bgConnected === false` 时使用 `setTimeout` 递归重试（最多 50 次 × 100ms），但 `cleanup()` 不清理这些 timer。虽然 `bgPort = null` 让 timer 回调变成 no-op，但：
+
+1. 已排队的 timer 继续消耗事件循环
+2. 多个并发 `dispatchFetch` 各自独立触发 `reconnectBg()`，发送重复的 connect 消息
+3. 如果新的 `connectToBg()` 在旧 timer 存活期间被调用，旧闭包可能与新 port 交互
+
+**解决方案**: 用 `activeRetryTimers` Set 追踪所有 `setTimeout` ID，`cleanup()` 中统一 `clearTimeout`。用 `reconnectPending` flag 防止多个 dispatchFetch 并发触发 `reconnectBg()`。
+
 ---
 
 ## edge-tts
