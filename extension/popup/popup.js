@@ -1,3 +1,5 @@
+import { loadConfig, createConfig } from "../config.js";
+
 const portInput = document.getElementById("port");
 const saveBtn = document.getElementById("save");
 const statusDiv = document.getElementById("status");
@@ -17,7 +19,7 @@ saveBtn.addEventListener("click", async () => {
   }
   await browser.storage.local.set({ port });
   showStatus("Saved!", true);
-  checkHealth(port);
+  checkHealth(createConfig({ backendPort: port }));
 });
 
 function showStatus(msg, ok) {
@@ -26,22 +28,20 @@ function showStatus(msg, ok) {
   statusDiv.style.display = "block";
 }
 
-async function checkHealth(port) {
+async function checkHealth(config) {
   try {
-    const resp = await fetch(`http://127.0.0.1:${port}/health`);
+    const resp = await fetch(config.httpUrl("/health"));
     if (resp.ok) {
-      showStatus(`Connected to backend on port ${port}`, true);
+      showStatus(`Connected to backend on port ${config.backendPort}`, true);
     } else {
       showStatus(`Backend responded with ${resp.status}`, false);
     }
   } catch {
     showStatus(
-      `Backend not running. Start with: lactor serve --port ${port} --extension-id ${browser.runtime.id}`,
+      `Backend not running. Start with: lactor serve --port ${config.backendPort} --extension-id ${browser.runtime.id}`,
       false
     );
   }
 }
 
-browser.storage.local.get("port").then((result) => {
-  checkHealth(result.port || 7890);
-});
+loadConfig(browser.storage.local).then(checkHealth);

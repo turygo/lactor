@@ -10,10 +10,9 @@ import { renderSegments } from "./components/render-segments.js";
 import { resolveVoice } from "./components/resolve-voice.js";
 import { loadCachedVoices, cacheVoices } from "./components/voice-cache.js";
 import { loadVoicePrefs, saveVoicePref } from "./components/voice-prefs.js";
+import { loadConfig } from "../config.js";
 
-const DEFAULT_PORT = 7890;
-
-let backendPort = DEFAULT_PORT;
+let config = null;
 let paragraphs = [];
 let currentParaIndex = 0;
 let voice = "en-US-AriaNeural";
@@ -67,10 +66,7 @@ async function init() {
 
   window.parent.postMessage({ type: "lactor-ready" }, "*");
 
-  try {
-    const result = await browser.storage.local.get("port");
-    if (result.port) backendPort = result.port;
-  } catch {}
+  config = await loadConfig(browser.storage.local);
 
   const params = new URLSearchParams(location.search);
   const tabId = parseInt(params.get("tabId"), 10);
@@ -124,7 +120,7 @@ async function init() {
     }
 
     // Fetch fresh voices (updates UI and cache when done)
-    const fresh = await controls.loadVoices(backendPort, { skipUI: userChangedVoice });
+    const fresh = await controls.loadVoices(config, { skipUI: userChangedVoice });
     if (fresh.length > 0) {
       cacheVoices(fresh, browser.storage.local);
       // Skip auto-selection if user manually changed voice during the fetch
@@ -200,7 +196,7 @@ function connectToBg() {
     bgConnected = false;
     bgPort = null;
   });
-  bgPort.postMessage({ action: "connect", port: backendPort });
+  bgPort.postMessage({ action: "connect", wsEndpoint: config.wsUrl() });
 }
 
 function parseParaIndex(id) {
@@ -223,7 +219,7 @@ function reconnectBg() {
   if (!bgPort) return;
   log.log("requesting background WS reconnect");
   if (scheduler) scheduler.resetConnections();
-  bgPort.postMessage({ action: "connect", port: backendPort });
+  bgPort.postMessage({ action: "connect", wsEndpoint: config.wsUrl() });
 }
 
 function dispatchFetch(fetch) {

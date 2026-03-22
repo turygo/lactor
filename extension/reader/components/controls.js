@@ -61,13 +61,13 @@ export class Controls {
 
   /**
    * Populate voice dropdown from backend /voices endpoint.
-   * @param {number} port - backend port
+   * @param {{ httpUrl: function }} config - config object with httpUrl method
    * @param {{ skipUI?: boolean }} [opts] - skip UI rebuild (e.g. when user already changed voice)
    * @returns {Promise<Array<{name: string, locale: string}>>} Loaded voices, or [] on error
    */
-  async loadVoices(port, opts) {
+  async loadVoices(config, opts) {
     try {
-      const resp = await fetch(`http://127.0.0.1:${port}/voices`);
+      const resp = await fetch(config.httpUrl("/voices"));
       if (!resp.ok) return [];
       const voices = await resp.json();
       if (!opts || !opts.skipUI) {
