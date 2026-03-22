@@ -79,4 +79,20 @@ describe("voice-prefs", () => {
       await assert.doesNotReject(() => saveVoicePref("en", "en-US-AriaNeural", storage));
     });
   });
+
+  describe("round-trip regression", () => {
+    it("saves and loads multiple language prefs independently", async () => {
+      const store = {};
+      const storage = {
+        get: async (key) => ({ [key]: store[key] }),
+        set: async (data) => Object.assign(store, data),
+      };
+      await saveVoicePref("en", "en-US-GuyNeural", storage);
+      await saveVoicePref("zh", "zh-CN-YunxiNeural", storage);
+      await saveVoicePref("en", "en-US-AriaNeural", storage); // overwrite
+      const prefs = await loadVoicePrefs(storage);
+      assert.equal(prefs.en, "en-US-AriaNeural");
+      assert.equal(prefs.zh, "zh-CN-YunxiNeural");
+    });
+  });
 });
