@@ -299,9 +299,7 @@ export function createReader(deps) {
   }
 
   function getRemainingPlaybackMs() {
-    if (!player.playing || !player._currentBuffer) return 0;
-    const totalMs = player._currentBuffer.duration * 1000;
-    return Math.max(0, totalMs - player.getCurrentTimeMs());
+    return player.getRemainingMs();
   }
 
   // ── Playback ────────────────────────────────────────────────────
@@ -314,7 +312,7 @@ export function createReader(deps) {
       reconnectBg();
     }
 
-    if (player._currentBuffer) {
+    if (player.hasBuffer) {
       await player.resume();
       highlight.start(() => player.getCurrentTimeMs());
       return;
