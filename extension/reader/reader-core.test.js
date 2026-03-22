@@ -63,6 +63,7 @@ function makeMockScheduler() {
   return {
     shouldPrefetch: () => false,
     getNextFetch: mock.fn(() => null),
+    fetchByIndex: mock.fn(() => null),
     onFetchComplete: mock.fn(),
     onPlaybackComplete: mock.fn(),
     resetConnections: mock.fn(),
@@ -431,9 +432,9 @@ describe("createReader", () => {
     it("resolves pending request on done message", async () => {
       const deps = makeDeps();
       const mockScheduler = makeMockScheduler();
-      mockScheduler.getNextFetch = mock.fn(() => ({
+      mockScheduler.fetchByIndex = mock.fn((i) => ({
         conn: 0,
-        index: 0,
+        index: i,
         text: "Hello world",
       }));
       deps.components.createScheduler = () => mockScheduler;
@@ -523,6 +524,29 @@ describe("createReader", () => {
     });
   });
 
+  describe("TTS error handling", () => {
+    it("calls scheduler.onFetchComplete on TTS error to free connection", async () => {
+      const deps = makeDeps();
+      const mockScheduler = makeMockScheduler();
+      mockScheduler.fetchByIndex = mock.fn((i) => ({
+        conn: 0,
+        index: i,
+        text: "Hello world",
+      }));
+      deps.components.createScheduler = () => mockScheduler;
+      const reader = createReader(deps);
+      await reader.init();
+      deps._mocks.mockPort._fire({ type: "connected" });
+
+      const ensurePromise = reader._ensureBuffered(0);
+      deps._mocks.mockPort._fire({ type: "error", id: "para-0", message: "TTS failed" });
+
+      await ensurePromise;
+      assert.equal(mockScheduler.onFetchComplete.mock.callCount(), 1);
+      assert.equal(mockScheduler.onFetchComplete.mock.calls[0].arguments[0], 0);
+    });
+  });
+
   describe("dispatchFetch", () => {
     it("sends speak message to background port", async () => {
       const deps = makeDeps();
@@ -559,6 +583,25 @@ describe("createReader", () => {
       await reader._ensureBuffered(0);
     });
 
+    it("dispatches fetch for the exact paraIndex via fetchByIndex", async () => {
+      const deps = makeDeps();
+      const mockScheduler = makeMockScheduler();
+      const fetchedIndices = [];
+      mockScheduler.fetchByIndex = mock.fn((i) => {
+        fetchedIndices.push(i);
+        return { conn: 0, index: i, text: "text" };
+      });
+      deps.components.createScheduler = () => mockScheduler;
+      const reader = createReader(deps);
+      await reader.init();
+      deps._mocks.mockPort._fire({ type: "connected" });
+
+      reader._ensureBuffered(5);
+
+      assert.equal(fetchedIndices.length, 1);
+      assert.equal(fetchedIndices[0], 5);
+    });
+
     it("rejects pending promises on cleanup", async () => {
       const deps = makeDeps();
       const reader = createReader(deps);
@@ -590,9 +633,9 @@ describe("createReader", () => {
     it("skips paragraph with no audio chunks", async () => {
       const deps = makeDeps();
       const mockScheduler = makeMockScheduler();
-      mockScheduler.getNextFetch = mock.fn(() => ({
+      mockScheduler.fetchByIndex = mock.fn((i) => ({
         conn: 0,
-        index: 0,
+        index: i,
         text: "Hello world",
       }));
       deps.components.createScheduler = () => mockScheduler;
@@ -616,9 +659,9 @@ describe("createReader", () => {
     it("decodes audio and starts playback with highlighting", async () => {
       const deps = makeDeps();
       const mockScheduler = makeMockScheduler();
-      mockScheduler.getNextFetch = mock.fn(() => ({
+      mockScheduler.fetchByIndex = mock.fn((i) => ({
         conn: 0,
-        index: 0,
+        index: i,
         text: "Hello world",
       }));
       deps.components.createScheduler = () => mockScheduler;
