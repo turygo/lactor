@@ -9,10 +9,30 @@ export function sanitize(context) {
   const { body } = context;
 
   // ── 1. Semantic noise removal ─────────────────────────────────
-  const noiseSelector = ["nav", "aside", '[role="navigation"]', '[role="complementary"]'].join(",");
+  const noiseSelector = [
+    "nav",
+    "aside",
+    '[role="navigation"]',
+    '[role="complementary"]',
+    "footer",
+    '[role="banner"]',
+    '[role="contentinfo"]',
+    "form",
+    '[class*="cookie"]',
+    '[class*="social-share"]',
+    '[class*="newsletter"]',
+    '[class*="ad-"]',
+    '[id*="ad-"]',
+    '[class*="sidebar"]',
+  ].join(",");
 
   for (const el of [...body.querySelectorAll(noiseSelector)]) {
     el.remove();
+  }
+
+  // Remove <header> elements that contain <nav> (site headers, not article headers)
+  for (const el of [...body.querySelectorAll("header")]) {
+    if (el.querySelector("nav")) el.remove();
   }
 
   // ── 2. Lightweight content scoring on direct children ─────────
@@ -61,6 +81,29 @@ export function sanitize(context) {
     if (len < 30) {
       child.remove();
       continue;
+    }
+  }
+
+  // ── 3. Text-pattern noise removal on leaf-level elements ───────
+  const TEXT_NOISE_RE = [
+    /^Copyright\s*[©(]/i,
+    /©\s*\d{4}/,
+    /^Advertisement$/i,
+    /^[_\-=*·•]{3,}$/,
+    /^All Rights Reserved/i,
+  ];
+
+  for (const el of [...body.querySelectorAll("*")]) {
+    if (HEADING_RE.test(el.tagName)) continue;
+    if (el.querySelector(MEDIA_SELECTOR) || el.matches(MEDIA_SELECTOR)) continue;
+    // Only target leaf-level blocks (no block children)
+    if (el.children.length > 0) continue;
+
+    const text = (el.textContent || "").trim();
+    if (text.length === 0 || text.length > 200) continue;
+
+    if (TEXT_NOISE_RE.some((re) => re.test(text))) {
+      el.remove();
     }
   }
 
