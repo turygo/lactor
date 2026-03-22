@@ -48,11 +48,12 @@ export class Controls {
   /**
    * Populate voice dropdown from backend /voices endpoint.
    * @param {number} port - backend port
+   * @returns {Promise<Array<{name: string, locale: string}>>} Loaded voices, or [] on error
    */
   async loadVoices(port) {
     try {
       const resp = await fetch(`http://127.0.0.1:${port}/voices`);
-      if (!resp.ok) return;
+      if (!resp.ok) return [];
       const voices = await resp.json();
       this._voiceSelect.innerHTML = "";
       for (const v of voices) {
@@ -61,11 +62,18 @@ export class Controls {
         opt.textContent = `${v.name} (${v.locale})`;
         this._voiceSelect.appendChild(opt);
       }
-      // Default to first English voice
-      const enVoice = voices.find((v) => v.locale.startsWith("en-"));
-      if (enVoice) this._voiceSelect.value = enVoice.name;
+      return voices;
     } catch (err) {
       console.error("Lactor: failed to load voices", err);
+      return [];
     }
+  }
+
+  /**
+   * Set the selected voice in the dropdown programmatically.
+   * @param {string} name - Voice name to select
+   */
+  setVoice(name) {
+    this._voiceSelect.value = name;
   }
 }
