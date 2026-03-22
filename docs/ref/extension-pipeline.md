@@ -24,15 +24,25 @@ const ctx = pipeline.run(htmlString, { lang: "zh" });
 
 移除语义噪声和低质量内容块。
 
-**规则：**
-1. 移除 `<nav>`, `<aside>`, `[role="navigation"]`, `[role="complementary"]`
-2. 跳过 headings（`H1-H6` 永远保留）
-3. 跳过含媒体（`img, video, pre, table, figure, svg`）的块
-4. 跳过含公式类名（`math`, `katex`, `mathjax`）的块（递归检查子元素）
-5. 移除空块（`textContent.trim().length === 0`）
-6. 移除链接密度 > 80% 的块
-7. 移除链接密度 > 60% 且文本 < 100 字符的块
-8. 移除非 heading 的短块（< 30 字符）
+**Phase 1 — 语义噪声移除：**
+1. 移除 `<nav>`, `<aside>`, `<footer>`, `<form>`, `[role="navigation"]`, `[role="complementary"]`, `[role="banner"]`, `[role="contentinfo"]`
+2. 移除含 `<nav>` 的 `<header>` 元素（站点 header，非文章标题）
+3. 移除 class/id 匹配噪声模式的元素：`cookie`, `social-share`, `newsletter`, `ad-`, `sidebar`
+
+**Phase 2 — 内容评分（直接子元素）：**
+4. 跳过 headings（`H1-H6` 永远保留）
+5. 跳过含媒体（`img, video, pre, table, figure, svg`）的块
+6. 跳过含公式类名（`math`, `katex`, `mathjax`）的块（递归检查子元素）
+7. 移除空块（`textContent.trim().length === 0`）
+8. 移除链接密度 > 80% 的块
+9. 移除链接密度 > 60% 且文本 < 100 字符的块
+10. 移除非 heading 的短块（< 30 字符）
+
+**Phase 3 — 文本模式过滤（叶子元素）：**
+11. 扫描所有无子元素的叶子节点（≤ 200 字符），匹配以下模式则移除：
+    - `Copyright ©/(`、`© 年份`、`All Rights Reserved`
+    - `Advertisement`
+    - 装饰分隔线（`___`, `---`, `***`, `===` 等）
 
 ## Structure Stage (`components/pipeline/structure.js`)
 
