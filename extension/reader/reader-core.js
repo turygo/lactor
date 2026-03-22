@@ -28,6 +28,8 @@ export function createReader(deps) {
   let bgConnected = false;
   const buffers = new Map();
   const pendingRequests = new Map();
+  const activeRetryTimers = new Set();
+  let reconnectPending = false;
 
   // ── Components ──────────────────────────────────────────────────
   const player = components.createPlayer();
@@ -155,6 +157,7 @@ export function createReader(deps) {
     bgPort.onMessage.addListener((msg) => {
       if (msg.type === "connected") {
         bgConnected = true;
+        reconnectPending = false;
         log.log("background WS connected");
         return;
       }
@@ -240,18 +243,24 @@ export function createReader(deps) {
           text: fetch.text,
           voice,
         });
-      } else if (bgPort) {
-        retries++;
-        if (retries === 1) {
-          log.log(`dispatch fetch: connection lost, triggering reconnect`);
-          reconnectBg();
-        }
-        if (retries > 50) {
-          log.error(`dispatch fetch: gave up after ${retries} retries`);
-          return;
-        }
-        setTimeout(send, 100);
+        return;
       }
+      if (!bgPort) return;
+      retries++;
+      if (retries === 1 && !reconnectPending) {
+        log.log(`dispatch fetch: connection lost, triggering reconnect`);
+        reconnectPending = true;
+        reconnectBg();
+      }
+      if (retries > 50) {
+        log.error(`dispatch fetch: gave up after ${retries} retries`);
+        return;
+      }
+      const timerId = setTimeout(() => {
+        activeRetryTimers.delete(timerId);
+        send();
+      }, 100);
+      activeRetryTimers.add(timerId);
     };
     send();
   }
@@ -387,6 +396,9 @@ export function createReader(deps) {
   // ── Cleanup ─────────────────────────────────────────────────────
 
   function cleanup() {
+    for (const id of activeRetryTimers) clearTimeout(id);
+    activeRetryTimers.clear();
+    reconnectPending = false;
     player.destroy();
     highlight.reset();
     if (bgPort) {

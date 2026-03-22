@@ -567,6 +567,71 @@ describe("createReader", () => {
         )
       );
     });
+
+    it("cleanup cancels pending retry timers", async () => {
+      const deps = makeDeps();
+      const reader = createReader(deps);
+      await reader.init();
+      // Do NOT fire "connected" — bgConnected stays false, triggering retries
+
+      const countBefore = deps._mocks.mockPort.postMessage.mock.callCount();
+      reader._dispatchFetch({ conn: 0, index: 0, text: "Hello" });
+      reader.cleanup();
+
+      // Wait long enough for several retries to have fired if not cancelled
+      await new Promise((r) => setTimeout(r, 400));
+
+      // No new speak messages should have been sent after cleanup
+      const speakCalls = deps._mocks.mockPort.postMessage.mock.calls
+        .slice(countBefore)
+        .filter((c) => c.arguments[0].action === "speak");
+      assert.equal(speakCalls.length, 0, "no speak messages after cleanup");
+    });
+
+    it("deduplicates reconnectBg across concurrent dispatches", async () => {
+      const deps = makeDeps();
+      const reader = createReader(deps);
+      await reader.init();
+      // bgConnected is false — dispatches will retry and trigger reconnect
+
+      reader._dispatchFetch({ conn: 0, index: 0, text: "Hello" });
+      reader._dispatchFetch({ conn: 1, index: 1, text: "World" });
+
+      // Count how many "connect" action messages were sent after init's own connect
+      const connectCalls = deps._mocks.mockPort.postMessage.mock.calls.filter(
+        (c) => c.arguments[0].action === "connect"
+      );
+      // init sends one "connect"; retries should add at most one more (not two)
+      assert.ok(
+        connectCalls.length <= 2,
+        `expected at most 2 connect calls (init + 1 reconnect), got ${connectCalls.length}`
+      );
+
+      reader.cleanup();
+    });
+
+    it("retry succeeds after connection restored", async () => {
+      const deps = makeDeps();
+      const reader = createReader(deps);
+      await reader.init();
+      // bgConnected is false
+
+      reader._dispatchFetch({ conn: 0, index: 0, text: "Hello" });
+
+      // Simulate connection restored after a short delay
+      await new Promise((r) => setTimeout(r, 150));
+      deps._mocks.mockPort._fire({ type: "connected" });
+
+      // Wait for retry to pick it up
+      await new Promise((r) => setTimeout(r, 200));
+
+      const speakCalls = deps._mocks.mockPort.postMessage.mock.calls.filter(
+        (c) => c.arguments[0].action === "speak" && c.arguments[0].id === "para-0"
+      );
+      assert.equal(speakCalls.length, 1, "speak message sent after reconnection");
+
+      reader.cleanup();
+    });
   });
 
   describe("ensureBuffered", () => {
