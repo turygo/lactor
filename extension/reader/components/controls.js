@@ -2,7 +2,8 @@
  * Controls: play/pause button, voice dropdown, close button.
  */
 export class Controls {
-  constructor({ onPlay, onPause, onVoiceChange, onClose }) {
+  constructor({ onPlay, onPause, onVoiceChange, onClose }, { log } = {}) {
+    this._log = log || { error() {} };
     this._playBtn = document.getElementById("btn-play");
     this._voiceSelect = document.getElementById("voice-select");
     this._closeBtn = document.getElementById("btn-close");
@@ -75,7 +76,7 @@ export class Controls {
       }
       return voices;
     } catch (err) {
-      console.error("Lactor: failed to load voices", err);
+      this._log.error("failed to load voices", err);
       return [];
     }
   }
