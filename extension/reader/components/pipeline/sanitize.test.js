@@ -134,6 +134,117 @@ describe("sanitize – content scoring", () => {
   });
 });
 
+// ── Extended semantic noise removal ──────────────────────────────
+
+describe("sanitize – extended noise selectors", () => {
+  it("removes footer elements even with long content", () => {
+    const c = ctx(
+      `<footer>Copyright 2024 Example Inc. All rights reserved. This material may not be reproduced without permission.</footer><p>Article body text that is long enough to survive the scoring filters.</p>`
+    );
+    sanitize(c);
+    assert.equal(c.body.querySelectorAll("footer").length, 0);
+    assert.ok(c.body.querySelector("p"));
+  });
+
+  it("removes header elements containing nav", () => {
+    const c = ctx(
+      `<header><nav><a href="/">Home</a></nav></header><p>Article body text that is long enough to survive the scoring filters.</p>`
+    );
+    sanitize(c);
+    assert.equal(c.body.querySelectorAll("header").length, 0);
+  });
+
+  it("removes elements with ad-related class names even with long content", () => {
+    const c = ctx(
+      `<div class="ad-banner">Special offer: Buy now and get 50% off your first purchase of our premium subscription plan today!</div><p>Article body text that is long enough to survive the scoring filters.</p>`
+    );
+    sanitize(c);
+    assert.equal(c.body.querySelectorAll('[class*="ad-"]').length, 0);
+  });
+
+  it("removes elements with cookie/banner class names", () => {
+    const c = ctx(
+      `<div class="cookie-notice">We use cookies</div><p>Article body text that is long enough to survive the scoring filters.</p>`
+    );
+    sanitize(c);
+    assert.equal(c.body.querySelectorAll('[class*="cookie"]').length, 0);
+  });
+
+  it("removes elements with social-share class", () => {
+    const c = ctx(
+      `<div class="social-share">Share on Twitter</div><p>Article body text that is long enough to survive the scoring filters.</p>`
+    );
+    sanitize(c);
+    assert.equal(c.body.querySelectorAll('[class*="social-share"]').length, 0);
+  });
+
+  it("removes form elements", () => {
+    const c = ctx(
+      `<form class="newsletter-signup"><input placeholder="Email"></form><p>Article body text that is long enough to survive the scoring filters.</p>`
+    );
+    sanitize(c);
+    assert.equal(c.body.querySelectorAll("form").length, 0);
+  });
+
+  it("removes role=banner and role=contentinfo elements", () => {
+    const c = ctx(
+      `<div role="banner">Site header</div><div role="contentinfo">Footer info</div><p>Article body text that is long enough to survive the scoring filters.</p>`
+    );
+    sanitize(c);
+    assert.equal(c.body.querySelectorAll('[role="banner"]').length, 0);
+    assert.equal(c.body.querySelectorAll('[role="contentinfo"]').length, 0);
+  });
+
+  it("preserves heading inside a div with noise-like class", () => {
+    const c = ctx(
+      `<div class="sidebar-widget"><h2>Related Articles</h2></div><p>Article body text that is long enough to survive the scoring filters.</p>`
+    );
+    sanitize(c);
+    // The sidebar div is removed but we verify the heading protection doesn't interfere
+    assert.equal(c.body.querySelectorAll('[class*="sidebar"]').length, 0);
+  });
+});
+
+// ── Text-pattern noise removal ───────────────────────────────────
+
+describe("sanitize – text pattern filtering", () => {
+  it("removes decorative separator lines (___)", () => {
+    const c = ctx(
+      `<p>First paragraph with enough content to survive scoring.</p><p>___</p><p>Second paragraph with enough content to survive scoring.</p>`
+    );
+    sanitize(c);
+    const texts = [...c.body.querySelectorAll("p")].map((p) => p.textContent.trim());
+    assert.ok(!texts.includes("___"), "separator should be removed");
+    assert.equal(c.body.querySelectorAll("p").length, 2);
+  });
+
+  it("removes copyright text blocks", () => {
+    const c = ctx(
+      `<p>Article body text that is long enough to survive the scoring filters.</p><p>Copyright ©2024 Example Corp. All Rights Reserved.</p>`
+    );
+    sanitize(c);
+    const texts = [...c.body.querySelectorAll("p")].map((p) => p.textContent.trim());
+    assert.ok(!texts.some((t) => t.startsWith("Copyright")), "copyright should be removed");
+  });
+
+  it("removes Advertisement text blocks", () => {
+    const c = ctx(
+      `<p>Advertisement</p><p>Article body text that is long enough to survive the scoring filters.</p>`
+    );
+    sanitize(c);
+    const texts = [...c.body.querySelectorAll("p")].map((p) => p.textContent.trim());
+    assert.ok(!texts.includes("Advertisement"), "Advertisement should be removed");
+  });
+
+  it("preserves long paragraphs even if they contain copyright-like text", () => {
+    const longText =
+      "This article discusses Copyright law and its implications for digital media distribution in the modern era of the internet.";
+    const c = ctx(`<p>${longText}</p>`);
+    sanitize(c);
+    assert.ok(c.body.querySelector("p"), "long paragraph should survive");
+  });
+});
+
 // ── Return value ──────────────────────────────────────────────────
 
 describe("sanitize – return value", () => {
