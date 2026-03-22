@@ -75,12 +75,12 @@ browser.runtime.onConnect.addListener((port) => {
   if (port.name !== "lactor-tts") return;
 
   const wsConns = [null, null]; // dual WebSocket connections
-  let wsUrl = null;
+  let wsEndpoint = null;
   let reconnectCounts = [0, 0];
 
   function createWS(connIndex) {
-    if (!wsUrl) return;
-    const ws = new WebSocket(wsUrl);
+    if (!wsEndpoint) return;
+    const ws = new WebSocket(wsEndpoint);
 
     ws.onopen = () => {
       // Check if both connections are ready
@@ -100,7 +100,7 @@ browser.runtime.onConnect.addListener((port) => {
     };
 
     ws.onclose = () => {
-      if (reconnectCounts[connIndex] < MAX_RECONNECT && wsUrl) {
+      if (reconnectCounts[connIndex] < MAX_RECONNECT && wsEndpoint) {
         reconnectCounts[connIndex]++;
         setTimeout(() => {
           wsConns[connIndex] = createWS(connIndex);
@@ -132,7 +132,7 @@ browser.runtime.onConnect.addListener((port) => {
         }
         wsConns[i] = null;
       }
-      wsUrl = `ws://127.0.0.1:${msg.port}/tts`;
+      wsEndpoint = msg.wsEndpoint;
       reconnectCounts = [0, 0];
       createWS(0);
       createWS(1);
@@ -149,7 +149,7 @@ browser.runtime.onConnect.addListener((port) => {
   });
 
   function closeAll() {
-    wsUrl = null; // prevent reconnects
+    wsEndpoint = null; // prevent reconnects
     for (let i = 0; i < 2; i++) {
       if (wsConns[i] && wsConns[i].readyState <= WebSocket.OPEN) {
         wsConns[i].close();
