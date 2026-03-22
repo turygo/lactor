@@ -25,8 +25,9 @@ function makeMockPort() {
 function makeMockPlayer() {
   return {
     playing: false,
-    _currentBuffer: null,
+    hasBuffer: false,
     getCurrentTimeMs: () => 0,
+    getRemainingMs: () => 0,
     decodeAudio: mock.fn(async () => ({ duration: 1.0 })),
     play: mock.fn((_buf, onEnded) => {
       if (onEnded) onEnded();

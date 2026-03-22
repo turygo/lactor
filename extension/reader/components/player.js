@@ -21,6 +21,16 @@ export class Player {
     return this._playing;
   }
 
+  get hasBuffer() {
+    return this._currentBuffer !== null;
+  }
+
+  getRemainingMs() {
+    if (!this._playing || !this._currentBuffer) return 0;
+    const totalMs = this._currentBuffer.duration * 1000;
+    return Math.max(0, totalMs - this.getCurrentTimeMs());
+  }
+
   /**
    * Get current playback time in milliseconds.
    */
