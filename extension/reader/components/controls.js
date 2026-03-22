@@ -46,6 +46,20 @@ export class Controls {
   }
 
   /**
+   * Populate voice dropdown from a voice array (e.g. from cache).
+   * @param {Array<{name: string, locale: string}>} voices
+   */
+  populateVoices(voices) {
+    this._voiceSelect.innerHTML = "";
+    for (const v of voices) {
+      const opt = document.createElement("option");
+      opt.value = v.name;
+      opt.textContent = `${v.name} (${v.locale})`;
+      this._voiceSelect.appendChild(opt);
+    }
+  }
+
+  /**
    * Populate voice dropdown from backend /voices endpoint.
    * @param {number} port - backend port
    * @returns {Promise<Array<{name: string, locale: string}>>} Loaded voices, or [] on error
@@ -55,13 +69,7 @@ export class Controls {
       const resp = await fetch(`http://127.0.0.1:${port}/voices`);
       if (!resp.ok) return [];
       const voices = await resp.json();
-      this._voiceSelect.innerHTML = "";
-      for (const v of voices) {
-        const opt = document.createElement("option");
-        opt.value = v.name;
-        opt.textContent = `${v.name} (${v.locale})`;
-        this._voiceSelect.appendChild(opt);
-      }
+      this.populateVoices(voices);
       return voices;
     } catch (err) {
       console.error("Lactor: failed to load voices", err);
