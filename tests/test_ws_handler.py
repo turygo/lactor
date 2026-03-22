@@ -90,9 +90,7 @@ async def test_ws_origin_rejected():
             assert e.rcvd.code == 4003, f"Expected close code 4003, got {e.rcvd.code}"
         except websockets.exceptions.InvalidStatus as e:
             rejected = True
-            assert e.response.status_code == 403, (
-                f"Expected HTTP 403, got {e.response.status_code}"
-            )
+            assert e.response.status_code == 403, f"Expected HTTP 403, got {e.response.status_code}"
         assert rejected, "Wrong Origin should be rejected"
 
         # Correct Origin should work

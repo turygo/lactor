@@ -1,9 +1,12 @@
-import { splitIntoParagraphs, renderParagraphs } from "./components/normalizer.js";
 import { HighlightEngine } from "./components/highlight.js";
 import { Player } from "./components/player.js";
 import { Controls } from "./components/controls.js";
 import { PrefetchScheduler } from "./components/scheduler.js";
 import { Logger, isDebugMode } from "./components/logger.js";
+import { createPipeline } from "./components/pipeline/index.js";
+import { sanitize } from "./components/pipeline/sanitize.js";
+import { structure } from "./components/pipeline/structure.js";
+import { renderSegments } from "./components/render-segments.js";
 
 const DEFAULT_PORT = 7890;
 
@@ -77,7 +80,11 @@ async function init() {
       return;
     }
 
-    paragraphs = splitIntoParagraphs(resp.data.content);
+    const pipeline = createPipeline([sanitize, structure]);
+    const ctx = pipeline.run(resp.data.content);
+    const segments = ctx.segments || [];
+    paragraphs = segments.map((s) => s.text);
+
     if (paragraphs.length === 0) {
       showError("Could not extract readable text from this page.");
       return;
@@ -89,7 +96,7 @@ async function init() {
       contentEl.appendChild(h1);
     }
 
-    renderParagraphs(contentEl, paragraphs);
+    renderSegments(contentEl, segments);
     loadingEl.style.display = "none";
 
     await controls.loadVoices(backendPort);
@@ -299,8 +306,8 @@ async function playFromParagraph(paraIndex) {
   log.log(`playFromParagraph(${paraIndex}/${paragraphs.length - 1})`);
 
   // Mark paragraph as current in UI
-  document.querySelectorAll("p[data-para]").forEach((p) => p.classList.remove("current-para"));
-  const paraEl = document.querySelector(`p[data-para="${paraIndex}"]`);
+  document.querySelectorAll("[data-para]").forEach((p) => p.classList.remove("current-para"));
+  const paraEl = document.querySelector(`[data-para="${paraIndex}"]`);
   if (paraEl) paraEl.classList.add("current-para");
 
   // Ensure current paragraph is buffered (may already be in-flight from prefetcher)

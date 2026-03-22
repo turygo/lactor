@@ -11,7 +11,7 @@
     "ws://127.0.0.1/*"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; connect-src 'self' ws://127.0.0.1:* http://127.0.0.1:*;"
+    "extension_pages": "script-src 'self'; connect-src 'self' ws://127.0.0.1:* http://127.0.0.1:*; img-src 'self' https: http:;"
   },
   "background": {
     "scripts": ["background.js"]
