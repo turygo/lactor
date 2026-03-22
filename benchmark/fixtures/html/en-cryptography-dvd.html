@@ -1,0 +1,266 @@
+<html class="trancy-zh-CN"><head>
+<meta http-equiv="content-type" content="text/html; charset=windows-1252"><title>Cryptography in Home Entertainment - A look at content scrambling in DVDs</title>
+<style>
+/* === eduser.css === */
+.xt--block{display:block}.xt--yt-target-wrapper img{width:16px;height:16px}.xt--target-inner{color:#000}xt-slider{position:fixed;right:0;top:0;z-index:2147483647;visibility:visible !important}xt-toolbar{visibility:visible !important}xt-mark[xt-annotation]::after{visibility:visible !important;content:attr(xt-annotation);margin-left:.25em;font-size:.85em;opacity:.8}.xt-root{position:relative}#trancy-card{visibility:visible !important}xt-dual{white-space:break-spaces}xt-dual xt-br{display:block !important;height:10px !important;background:rgba(0,0,0,0) !important}xt-dual.xt-inline{display:inline}xt-dual.xt-inline.xt-loading{opacity:0 !important}xt-dual.xt-inline xt-content{visibility:visible;margin-left:4px !important}xt-dual.xt-block xt-content{margin-top:0 !important;margin-bottom:10px !important;line-height:1.46em;display:inline-block;visibility:visible}xt-dual.xt-block xt-content.quote{border-left:2px solid;padding-left:8px}xt-dual.xt-block xt-content.background{padding:.5em;border-radius:8px}xt-dual.xt-loading xt-content{display:inherit !important}xt-trans{display:inline}.xt-loading{z-index:2147483647;position:relative;overflow:hidden;color:rgba(0,0,0,0) !important;animation:skeleton-loading 600ms linear infinite alternate;line-height:1.6em;white-space:unset !important}.xt-loading xt-mark{opacity:0 !important}@keyframes skeleton-loading{0%{background-color:rgba(128,128,128,.06)}100%{background-color:rgba(128,128,128,.12)}}.trancy-embed{margin-top:0 !important;border-radius:0 !important;width:100% !important;height:100% !important;position:fixed !important;left:0 !important;top:0 !important;z-index:2147483647 !important}.trancy-embed-root .self-start,.trancy-embed-root div[role=group],.trancy-embed-root div[data-test-id=content-library-footer],.trancy-embed-root #top-header-container{display:none !important}.trancy-embed-root div[slot=post-media-container]{left:0;top:0;width:100%;height:110vh;z-index:2147483647 !important}.trancy-embed-root .shreddit-aspect-ratio{height:100% !important;max-height:initial !important}.trancy-embed-root .feedback-binded,.trancy-embed-root #detailheader,.trancy-embed-root .collapsiblecontainer,.trancy-embed-root .list-container:nth-child(2),.trancy-embed-root .b_footer,.trancy-embed-root .carousel{display:none !important}.trancy-ar xt-content{direction:rtl !important}[data-testid=content-panel-wrapper] [data-testid=content-library-footer]{z-index:-1 !important}button.xt-retry-button{appearance:none !important;outline:none !important;color:inherit !important;background:none !important;border:1px solid #868686 !important;display:flex !important;font-size:12px !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;height:24px !important;border-radius:16px !important;cursor:pointer !important;padding:0 6px !important;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif !important;margin-right:4px !important}.xt-error-container{position:fixed !important;width:100vw !important;height:100vh !important;z-index:2147483647 !important;display:flex !important;justify-content:center !important;align-items:center !important;left:0 !important;top:0 !important}.xt-error-container-mask{position:absolute !important;width:100vw !important;height:100vh !important;background:rgba(0,0,0,.6) !important}.xt-error-container-content{position:relative !important;z-index:2147483647 !important;background:#252525 !important;width:340px !important;border:1px solid hsla(0,0%,100%,.2) !important;height:auto !important;padding:24px !important;border-radius:16px !important;box-shadow:0 0 10px 0 rgba(0,0,0,.5) !important;display:flex !important;flex-direction:column !important;gap:12px !important}.xt-error-container-content-title{font-size:17px !important;font-weight:bold !important;margin-bottom:12px !important;color:#fff !important;text-align:center !important}.xt-error-container-content-message{font-size:14px !important;color:hsla(0,0%,100%,.8) !important;line-height:1.6em !important;text-align:center !important}.xt-error-container-content-footer{margin-top:12px !important;display:flex !important;justify-content:space-between !important;gap:20px !important}.xt-error-container-content-footer button{appearance:none !important;outline:none !important;background:none !important;color:#fff !important;background:hsla(0,0%,100%,.05) !important;border:1px solid hsla(0,0%,100%,.2) !important;display:flex !important;align-items:center !important;justify-content:center !important;height:40px !important;border-radius:8px !important;cursor:pointer !important;width:50%;font-size:13px !important}
+
+</style>
+</head>
+
+<body>
+
+<p align="center"><font face="Verdana"><strong><br>
+<font color="#0000ff"><big><big>Cryptography in Home Entertainment</big></big></font><br>
+</strong><big>A look at content scrambling in DVDs</big></font></p>
+
+<p align="center"><font face="Verdana"><small>By Mark Barry</small><br>
+<small>June 2004</small></font></p>
+
+<hr color="#000000" noshade="noshade" size="1" width="50%">
+
+<p><font face="Verdana">Introduction</font></p>
+
+<p><font face="Verdana"><small>&nbsp;&nbsp;&nbsp; Did you know that every time you watch a
+DVD, a simple cryptosystem is at work behind the scenes?&nbsp; A cryptosystem, while
+watching DVDs?&nbsp; Why would anyone need a cryptosystem for playing DVDs on their home
+television?&nbsp; Well, there is a very good answer to that question!</small><br>
+<small>&nbsp;&nbsp;&nbsp; As you might know, illegal copying and distribution of digital
+media such as music and video is quite common.&nbsp; You have probably at one time or
+another had your own experience with this activity.&nbsp; So who cares if you copy some
+music or videos and give them to your friends?&nbsp; Well, the entertainment industry sure
+cares!&nbsp; When your friends are getting free music and videos, the entertainment
+industry is not profiting.&nbsp; It's that simple.&nbsp; So when the DVD standard for
+movies on disc was being developed in the mid-1990's, Hollywood studios had a vested
+interest in doing something about copyright protection.&nbsp; In 1996 the <strong>Content
+Scrambling System (CSS)</strong> was agreed upon.</small></font></p>
+
+<p><font face="Verdana">How CSS Works in DVD Copy Protection</font></p>
+
+<p><font face="Verdana">&nbsp;&nbsp;&nbsp; <small xt-marked="ok">First of all, how would someone copy a
+movie from DVD, and why?&nbsp; DVD video is stored in the MPEG-2 format which is easily
+portable to a personal computer (as a .mpg or sometimes .vob file) where it can be
+viewed.&nbsp; Theoretically all someone would have to do is copy over the MPEG video files
+and <em>voila!</em>, they have their favorite movie on their computer.&nbsp; Then their
+friends could download it, or with the <xt-mark w="dawn" style="color: #ff6a00 !important">dawn</xt-mark> of DVD burners, it could be re-burned and
+shared that way.&nbsp; There needs to be a way of locking out this sort of activity yet
+still letting the owner (buyer) <em>view</em> it.</small><img src="Cryptography%20in%20Home%20Entertainment%20-%20A%20look%20at%20content%20scrambling%20in%20DVDs_files/dvdcrypto1.jpg" align="right" border="1" height="211" width="250"><br>
+<small>&nbsp;&nbsp;&nbsp; The solution is a sort of crypto/authentication system between
+an actual DVD disc and the DVD player.&nbsp; A DVD player, of course, does not copy and
+store the video contents but is responsible only for playback.&nbsp; So the idea is to
+make sure that only a <em>player </em>is able to read the DVD.&nbsp; This brings us to the
+common Alice, Eve, and Bob example.&nbsp; Alice of course is trying to communicate with
+Bob without Eve knowing what she is saying.&nbsp; A DVD disc (Alice) is trying to
+communicate its video data to a DVD player (Bob).&nbsp; It doesn't trust what a computer
+(Eve) might do with the data.&nbsp; In essence, the video data on a DVD is encrypted (or
+scrambled) as the DVD player reads it.&nbsp; The DVD player, in turn, knows how to decrypt
+the data and play the video.&nbsp; At this point "Eve's Easy DVD Copy Software"
+doesn't know what to do with the encrypted data and thus cannot copy and view the video as
+a simple MPEG file.&nbsp; (As a side note, you may have heard of "Rippers" which
+do not decrypt the DVD data themselves, but instead record (or "rip") the
+standard video that the DVD player outputs.&nbsp; That's a different story).</small><br>
+<small>&nbsp;&nbsp;&nbsp; So basically only the DVD players have the "key" to
+decrypt a DVD, right?&nbsp; Yes, that's correct (for now).&nbsp; A not-for-profit
+organization called the <strong>DVD CCA </strong>(DVD Copy Control Association) is
+responsible for distributing keys to the various DVD player manufacturers (Sony,
+Panasonic, etc). &nbsp; Keys are not issued to just any "Joe Blow", and
+commercial DVD player manufacturers actually pay big bucks to obtain a license to use a
+key. Decrypting/descrambling circuitry is then added to the DVD player and the key is
+hard-coded in.&nbsp; It is virtually impossible to find a key inside a piece of
+hardware.&nbsp; Thus the copying problem has been solved...for now...</small></font></p>
+
+<p><font face="Verdana">The Problem with CSS</font></p>
+
+<p><font face="Verdana"><small>The problem with CSS is that the underlying cryptosystem
+and keys need to remain secret.&nbsp; Even modern cryptosystems are completely open and
+their workings can be known by anyone.&nbsp; Cryptosystems where the encryption/decryption
+algorithm must be kept secret are generally a very poor choice.&nbsp; CSS also has a very
+small number of keys (around 400 only) -- another weakness in any cryptosystem.&nbsp; Only
+the DVD player manufacturers have knowledge of the keys and cryptosystem, and in general,
+they can be trusted with it.&nbsp; But with so many DVD player manufacturers and millions
+of DVD users, something is bound to go wrong; secrets will leak or someone will crack the
+system.&nbsp; And unfortunately for the movie industry, that's exactly what happened.</small></font></p>
+
+<p><font face="Verdana">DeCSS</font></p>
+
+<p><small><font face="Verdana">The original reason behind the DVD scrambling system
+"needing" to be cracked was the lack of software DVD players for the Linux
+operating system.&nbsp; The CCA had issued licenses to various software companies allowing
+them to develop players for non-Linux systems, but because of the open source nature of
+Linux, the CCA denied offering licenses to Linux developers.&nbsp; (They certainly didn't
+want their cryptosystem open source!)&nbsp; At this point, the only way someone could
+develop a DVD player for Linux was to figure out the system themselves. &nbsp; That
+"someone" is generally credited as being 15-year-old Jon Johansen.&nbsp; In late
+October 1999, he released on the Internet, a software program called <strong>DeCSS </strong>that
+could actually decrypt the contents of DVDs.&nbsp; Johansen acknowledges though that the
+majority of the cracking source code came from anonymous contacts he had over the
+Internet.&nbsp; As hinted at from the name, it un-does CSS, something only licensed DVD
+players could (or were allowed to!) do.&nbsp; The cat had been let out of the bag.&nbsp;
+The DVD cryptosystem is no longer secret.</font></small></p>
+
+<p><font face="Verdana">After DeCSS</font></p>
+
+<p><small><font face="Verdana">After learning about DeCSS, the CCA was far from happy.
+&nbsp; Their secret cryptosystem and handful of secrets keys were already circulating the
+internet.&nbsp; In a few months following the first release of DeCSS, Norwegian
+authorities (Johansen's residence was in Norway) showed up at Johansen's home, seized his
+computers and even his cell phone, and led him off for questioning.&nbsp; Backed by the
+CCA and other groups such as the MPAA from the United States, "The National Authority
+for Investigation and Prosecution of Economic and Environmental Crime" of Norway
+prosecuted Johansen for "gaining unauthorized access to data" and
+"copyright infringement." &nbsp; During his time in and out of court, hacker
+geeks and techie types grew in mass support of Johansen.&nbsp; Many argued he had done
+nothing wrong; he had really only created a program to read data off his own purchased
+DVDs.&nbsp; He hadn't <em>pirated</em> anything, only made a program to <em>view</em> his
+DVDs in Linux.&nbsp; After much legal hubbub, Johansen was eventually acquitted in January
+2003 and all charges dropped. &nbsp; But subsequent legal action in the United States
+ensued.&nbsp; The CCA fought to have DeCSS banned.&nbsp; They led a massive search and
+destroy effort, sweeping the Internet trying to find websites offering DeCSS or even
+linking to it.&nbsp; Numerous lawsuits were filed and court battles fought.&nbsp; But to
+make a long story short, the CCA had no other choice but to give up its fight.&nbsp; Like
+anything spread over the Internet, it is virtually impossible to stop.&nbsp; In addition,
+several courts ruled that DeCSS was nothing more than free speech, protected by the first
+amendment.</font></small></p>
+
+<p><small><font face="Verdana">Since the CSS system has been implemented in (probably
+millions) of DVD players and (also probably millions or billions) of DVD discs worldwide,
+the now "cracked" system has little hope for being recalled and fixed.&nbsp; So
+the motion picture industry can only hope that nobody uses DeCSS to pirate movies, and
+prosecute those who do.&nbsp; For now it looks like CSS is here to stay and overall will
+still keep the common DVD user honest.&nbsp; In the mean time, the weakness of the CSS
+system had certainly taught the rest of the industry a lesson.&nbsp; An emerging standard
+of DVD audio was to use "CSS II", a similar successor of CSS.&nbsp; But since
+the cracking of CSS in 1999, certainly a better cryptosystem was needed.&nbsp; <strong>Content
+Protection for Pre-recorded Media</strong> (CPPM), developed by 4C (comprising of IBM,
+Intel, MEI, and Toshiba), was agreed upon in mid-2000.&nbsp; CPPM uses the Cryptomeria
+Cipher (C2) for content encryption, (which won't be discussed here).&nbsp; It proves to be
+stronger than CSS.</font></small></p>
+
+<p><font face="Verdana">More on the Creation of DeCSS</font></p>
+
+<p><small><font face="Verdana">In a hardware implementation, CSS is very secure against
+hacks.&nbsp; As mentioned before, getting into the workings of hardware is very difficult.
+&nbsp; But with software implementations of CSS, any skilled hacker can get into and
+closely analyze what is happening in the CSS decryption process.&nbsp; With CSS being of
+most interest to Linux users, and Linux users being mostly the geek/hacker types, it
+didn't take long for the cryptosystem to be torn apart.&nbsp; Although Jon Johansen has
+been given much media attention as the cracker of CSS, he admits he really wasn't.&nbsp;
+An anonymous German hacker was responsible for the CSS<em> crack</em> and a group called
+the Masters of Reverse Engineering (MoRE) claimed credit for writing the guts of DeCSS,
+the<em> software</em>.&nbsp; There are also claims that a group called "Drink or
+Die" (DoD) had also been working on CSS decryption.&nbsp; Hinting by the name of such
+organizations, "the anonymous German" was able to <em>reverse engineer</em>
+existing (licensed) DVD player software (available in non-Linux operating systems) in
+order to crack the cryptosystem.</font></small></p>
+
+<p><small><font face="Verdana">One aid in cracking the system was a software player called
+XingDVD, distributed by Xing Technologies, a subsidiary of RealNetworks.&nbsp; The
+developers of XingDVD neglected to encrypt the CSS decryption key (oops!).&nbsp; After a
+bit of digging around, the hacker was able to find this 5 byte (40 bit) key in plaintext.
+&nbsp; Johansen, learning of this discovery, was able to further guess about 170 keys used
+in other players.&nbsp; </font></small></p>
+
+<p><font face="Verdana">A Closer Look at CSS</font></p>
+
+<p><small><font face="Verdana">Although the following is not a complete description of
+CSS, it will give you a good sense of what is going on.&nbsp; One way the developers of
+CSS attempted to make the system more complicated was by utilizing a multi-stage
+decryption process with several sets of keys.&nbsp; There are three sets of keys
+associated with the system:</font></small><img src="Cryptography%20in%20Home%20Entertainment%20-%20A%20look%20at%20content%20scrambling%20in%20DVDs_files/dvdcrypto2.jpg" align="right" height="363" width="527"> 
+
+</p><ul>
+  <li><small><font face="Verdana">Disc Key: an encrypted value used to decrypt the title keys.</font></small></li>
+  <li><small><font face="Verdana">Title Key: a title key identifies each "Video Title
+    Set" on the DVD disc.&nbsp; These keys are stored in the title's header section.</font></small></li>
+  <li><small><font face="Verdana">Player Key: Each DVD player manufactured (or programmed in
+    software) is assigned a unique (and secret) key from a master set of 409 keys.&nbsp; In
+    other words, a Sony player has its own key, a Panasonic player has its own key, etc.
+    &nbsp; This is one of the things a company receives after they apply to the CCA to be a
+    DVD player manufacturer.</font></small></li>
+</ul>
+
+<p><small><font face="Verdana">The first step performed in playing your favorite DVD after
+inserting it in the player is <em>authentication</em>.&nbsp; The DVD disc and player must
+set up a trusting relationship.&nbsp; This is also part of the CSS process which involves
+the checking and decrypting of keys.&nbsp; This is a somewhat complicated multi-step
+process and will only be mentioned in passing.&nbsp; After successful authentication,
+another multi-step process takes place to ultimately decrypt the scrambled video
+data.&nbsp; The <em>player key</em> is used to decrypt the <em>disc key</em> which in turn
+is used to decrypt the <em>title key(s)</em> which in turn is used to decrypt the video
+data [see diagram].</font></small></p>
+
+<p><font face="Verdana"><small>Now for a <em>rough</em> description of the hardware
+implementation of CSS.&nbsp; To <em>encrypt</em> a stream of bits (such as the video
+data), a pseudo-random bit stream must be created and then XORed with the input
+bits.&nbsp; </small><img src="Cryptography%20in%20Home%20Entertainment%20-%20A%20look%20at%20content%20scrambling%20in%20DVDs_files/dvdcrypto3.jpg" align="right" height="405" width="226"><small>This
+pseudo-random bit stream appears random but is really generated from keys.&nbsp; The idea
+behind XORing the input stream and the pseudo-random stream to produce an encrypted output
+stream, is that it can be "un-XORed" with the original pseudo-random stream to
+produce the original input stream.&nbsp; Because the DVD player knows how to re-produce
+the pseudo-random bit stream by knowing the proper key and decryption scheme, it can
+decrypt the data on the DVD disc.&nbsp; The main components in generating the
+pseudo-random bit stream or "CSS Cipher Stream" are two <strong>Linear Feedback
+Shift Registers (LFSRs)</strong> (Don't worry, you don't need to know the details to
+understand what they're used for).&nbsp; To generate the CSS Cipher Stream to encrypt the
+video data, the LFSRs are "seeded" with the title key. </small><img src="Cryptography%20in%20Home%20Entertainment%20-%20A%20look%20at%20content%20scrambling%20in%20DVDs_files/dvdcrypto4.jpg" align="left" height="315" width="215"><small>[Note: these
+explanations and diagrams only cover encryption of the <em>video data</em> and do not take
+into account encryption of disc key, title key, or authentication.&nbsp; It should stay
+simpler this way.]&nbsp; The 17-bit LFSR is seeded with the first two bytes of the title
+key (16 bits), plus an extra 1-bit to make sure the LFSR doesn't go into "null
+cycling."&nbsp; The 25-bit LFSR is seeded with the last three bytes of the title key
+(24 bits), plus an extra 1-bit as before.&nbsp; From the 17-bit LFSR there are
+"taps" off bit registers 1 and 15. &nbsp; From the 25-bit LFSR there are taps
+off bit registers 11, 19, 20, and 23. &nbsp; These taps are XORed (or added with only the
+least-significant bit kept) and fed back to the input of the LFSR [See diagram].&nbsp; On
+each clock cycle, the LFSR "shifts", outputting a bit and taking in a new
+"feedback" bit. &nbsp; After 8 clock cycles each LFSR has output 8 bits
+(equaling one byte).&nbsp; The two output bytes from the two LFSRs are added together
+(with the carry bit thrown out) to get the CSS Cipher Stream byte.&nbsp; This
+key-generated byte is XORed with the "plaintext" video data to produce the CSS
+"ciphertext" scrambled data. &nbsp; Of course, this process continues to encrypt
+the whole section of video data.&nbsp; The entire CSS encrypting process takes place right
+before the DVD is mastered (or "burned") to disc.&nbsp; This process is
+essentially un-done by the player when playing your DVD.</small></font></p>
+
+<p><font face="Verdana">Further Research</font></p>
+
+<p><small><font face="Verdana">What you have just read is only a preview of CSS, DeCSS,
+and the adventures of "DVD Jon."&nbsp; These topics really touch on all sorts of
+subjects such as electrical engineering, computer science, cryptography (of course), and
+legal issues surrounding digital media.&nbsp; The "Informative Links" below can
+provide you with a much more in-depth look at these topics.&nbsp; Thanks for reading.</font></small></p>
+
+<p><font face="Verdana">Informative Links:</font> 
+
+</p><ul>
+  <li><small><font face="Verdana"><a href="http://www.lemuria.org/DeCSS/decss.html" target="_blank">CSS and DeCSS</a> - brief overview of each.&nbsp; Includes links to
+    various versions of DeCSS and source code.</font></small></li>
+  <li><small><font face="Verdana"><a href="http://www.lemuria.org/DeCSS/crypto.gq.nu/" target="_blank">Cryptanalysis of CSS</a> - Mathematical/technical workings of cracking
+    CSS.&nbsp; Concise, yet still requires some time to understand it all.</font></small></li>
+  <li><small><font face="Verdana"><a href="http://www.extremetech.com/article2/0,1558,1230030,00.asp" target="_blank">CSS:
+    Under the Hood</a> - Good overview of the decryption process in plain English.</font></small></li>
+  <li><small><font face="Verdana"><a href="http://www.extremetech.com/article2/0,1558,1231542,00.asp" target="_blank">CSS,
+    DeCSS, and Jon Johansen</a> - Nice article.</font></small></li>
+  <li><small><font face="Verdana"><a href="http://www-2.cs.cmu.edu/%7Edst/DeCSS/Kesden/index.html" target="_blank">CSS Hardware</a>
+    - Discusses in detail the hardware implementation of CSS.</font></small></li>
+  <li><small><font face="Verdana"><a href="http://www-2.cs.cmu.edu/%7Edst/DeCSS/Kesden/index.html" target="_blank">CSS Hardware</a>
+    - More on CSS in hardware.</font></small></li>
+  <li><small><font face="Verdana"><a href="http://www.dvdcca.org/faq.html" target="_blank">DVD
+    CCA FAQ</a> - the CCA's description of who they are and their commentary on DeCSS (pretty
+    interesting).</font></small></li>
+  <li><small><font face="Verdana"><a href="http://hometheater.about.com/cs/dvdlaserdisc/a/aaregioncodesa.htm" target="_blank">DVD
+    region encoding</a> - CSS is also used to enforce region encoding.&nbsp; Nice article on
+    this topic.</font></small></li>
+  <li><small><font face="Verdana"><a href="http://www.bbc.co.uk/dna/h2g2/alabaster/A642999" target="_blank">Illegal Prime Number</a> - this article includes DeCSS source code in the
+    form of a huge prime number.</font></small></li>
+  <li><small><font face="Verdana"><a href="http://www-2.cs.cmu.edu/%7Edst/DeCSS/Gallery/" target="_blank">Gallery of CSS Descramblers</a> - <em>massive</em> website with links to
+    all kinds of versions of DeCSS.&nbsp; Here you can see how the DeCSS source code has been
+    printed on shirts, turned into movies and music, and even printed in a high school year
+    book.&nbsp; It's got <em>everything</em>.&nbsp; <em>Highly recommend this site.</em></font></small></li>
+  <li><small><font face="Verdana"><a href="http://www-2.cs.cmu.edu/%7Edst/DeCSS/Gallery/decss_js.html" target="_blank">JavaScript
+    DeCSS</a> - by clicking this link you will be violating the Digital Millennium Copyright
+    Act.&nbsp; Try it!</font></small></li>
+  <li><small><font face="Verdana"><a href="http://efn.no/jonjohansen-en.html" target="_blank">DVD
+    Jon</a> - tons of links to articles relating to Jon Johansen's run-in with the law.</font></small></li>
+  <li><a href="http://www.cnn.com/2000/TECH/computing/01/31/johansen.interview.idg/" target="_blank"><small><font face="Verdana">Interview with Jon Johansen</font></small></a></li>
+</ul>
+</body><link rel="stylesheet" asset="eduser.css" href="Cryptography%20in%20Home%20Entertainment%20-%20A%20look%20at%20content%20scrambling%20in%20DVDs_files/eduser.css"><xt-control-center id="trancy-card"><div></div></xt-control-center></html>
