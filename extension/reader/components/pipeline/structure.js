@@ -108,6 +108,27 @@ const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "SVG"]);
 const FORMULA_CLASSES = ["math", "katex", "mathjax"];
 const BR_SENTINEL = "\x00BR\x00";
 
+// CJK-family ISO 639-3 / BCP-47 primary subtags → our placeholder key.
+// Covers Chinese varieties (cmn, yue, wuu, nan, hak, …) and ISO 639-3
+// codes for Japanese (jpn) and Korean (kor).
+const CJK_TAG_MAP = {
+  cmn: "zh",
+  yue: "zh",
+  wuu: "zh",
+  nan: "zh",
+  hak: "zh",
+  gan: "zh",
+  hsn: "zh",
+  cjy: "zh",
+  czh: "zh",
+  czo: "zh",
+  jpn: "ja",
+  kor: "ko",
+};
+
+// Tags meaning "undetermined" or "multiple" — fall through to heuristics.
+const UNDETERMINED_TAGS = new Set(["und", "mul", "mis", "zxx"]);
+
 // ── Unicode range helpers ────────────────────────────────────────────────────
 
 // CJK Unified Ideographs and extensions (broadly "Chinese characters").
@@ -150,7 +171,7 @@ function detectScript(text) {
  *   3. "en" (default).
  *
  * Returns one of: "en" | "zh" | "ja" | "ko".
- * Also normalizes `context.lang` to the resolved value.
+ * The caller is responsible for writing the result back to `context.lang`.
  */
 function resolveLang(context) {
   if (context.lang) {
@@ -161,10 +182,18 @@ function resolveLang(context) {
     for (const key of Object.keys(PLACEHOLDERS)) {
       if (key !== "en" && raw.startsWith(key)) return key;
     }
-    // Explicit lang present but unrecognized — fall through to heuristics.
+    // CJK-family tags (cmn-Hans, yue-Hant, jpn, kor, …)
+    const primary = raw.split("-")[0];
+    if (CJK_TAG_MAP[primary]) return CJK_TAG_MAP[primary];
+    // Undetermined / multiple → fall through to heuristics.
+    if (!UNDETERMINED_TAGS.has(primary)) {
+      // Explicit non-CJK lang (es, fr, de, …) → default to English
+      // rather than letting heuristics override a valid tag.
+      return "en";
+    }
   }
 
-  // Heuristic: scan body text.
+  // Heuristic: scan body text (when no explicit lang or undetermined).
   const text = context.body ? context.body.textContent : "";
   const detected = detectScript(text);
   if (detected) return detected;

@@ -442,5 +442,73 @@ describe("structure", () => {
       assert.equal(c.lang, "en");
       assert.equal(c.segments[0].text, "Code block.");
     });
+
+    it("non-CJK lang tag does not fall through to heuristics (e.g. 'es' page with CJK quotes)", () => {
+      const c = ctx("<p>中文引用内容</p><pre><code>x</code></pre>");
+      c.lang = "es";
+      structure(c);
+      assert.equal(c.lang, "en");
+      assert.equal(c.segments[1].text, "Code block.");
+    });
+
+    // ── CJK-family ISO 639-3 tags ──────────────────────────────
+
+    it("resolves 'cmn-Hans' to zh placeholders", () => {
+      const c = ctx("<pre><code>x</code></pre>");
+      c.lang = "cmn-Hans";
+      structure(c);
+      assert.equal(c.lang, "zh");
+      assert.equal(c.segments[0].text, "代码块。");
+    });
+
+    it("resolves 'yue-Hant' to zh placeholders", () => {
+      const c = ctx("<table><tr><td>x</td></tr></table>");
+      c.lang = "yue-Hant";
+      structure(c);
+      assert.equal(c.lang, "zh");
+      assert.equal(c.segments[0].text, "表格。");
+    });
+
+    it("resolves 'jpn' to ja placeholders", () => {
+      const c = ctx("<pre><code>x</code></pre>");
+      c.lang = "jpn";
+      structure(c);
+      assert.equal(c.lang, "ja");
+      assert.equal(c.segments[0].text, "コードブロック。");
+    });
+
+    it("resolves 'kor' to ko placeholders", () => {
+      const c = ctx("<pre><code>x</code></pre>");
+      c.lang = "kor";
+      structure(c);
+      assert.equal(c.lang, "ko");
+      assert.equal(c.segments[0].text, "코드 블록.");
+    });
+
+    // ── Undetermined / multiple tags → heuristics ───────────────
+
+    it("'und' falls through to heuristics and detects CJK", () => {
+      const c = ctx("<p>这是中文内容</p><pre><code>x</code></pre>");
+      c.lang = "und";
+      structure(c);
+      assert.equal(c.lang, "zh");
+      assert.equal(c.segments[1].text, "代码块。");
+    });
+
+    it("'mul' falls through to heuristics and detects Japanese", () => {
+      const c = ctx("<p>これはテスト</p><pre><code>x</code></pre>");
+      c.lang = "mul";
+      structure(c);
+      assert.equal(c.lang, "ja");
+      assert.equal(c.segments[1].text, "コードブロック。");
+    });
+
+    it("'und' with no CJK content defaults to 'en'", () => {
+      const c = ctx("<p>Hello world</p><pre><code>x</code></pre>");
+      c.lang = "und";
+      structure(c);
+      assert.equal(c.lang, "en");
+      assert.equal(c.segments[1].text, "Code block.");
+    });
   });
 });
