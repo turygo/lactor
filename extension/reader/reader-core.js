@@ -317,63 +317,69 @@ export function createReader(deps) {
     highlight.stop();
   }
 
-  async function playFromParagraph(paraIndex) {
-    if (paraIndex >= paragraphs.length) {
-      log.log("all paragraphs finished");
-      controls.setPlaying(false);
-      return;
+  async function playFromParagraph(startIndex) {
+    let paraIndex = startIndex;
+
+    while (paraIndex < paragraphs.length) {
+      currentParaIndex = paraIndex;
+      log.log(`playFromParagraph(${paraIndex}/${paragraphs.length - 1})`);
+
+      dom.document
+        .querySelectorAll("[data-para]")
+        .forEach((p) => p.classList.remove("current-para"));
+      const paraEl = dom.document.querySelector(`[data-para="${paraIndex}"]`);
+      if (paraEl) paraEl.classList.add("current-para");
+
+      try {
+        await ensureBuffered(paraIndex);
+      } catch {
+        return; // cleanup was called, stop playback silently
+      }
+      tryPrefetch();
+
+      const buf = buffers.get(paraIndex);
+      if (!buf || buf.audioChunks.length === 0) {
+        log.warn(`para ${paraIndex} has no audio chunks, skipping`);
+        paraIndex++;
+        continue;
+      }
+
+      try {
+        log.log(`para ${paraIndex} decoding ${buf.audioChunks.length} chunks...`);
+        const audioBuffer = await player.decodeAudio(buf.audioChunks);
+        log.log(`para ${paraIndex} decoded, duration=${audioBuffer.duration.toFixed(2)}s, playing`);
+
+        highlight.loadParagraph(paraIndex);
+        highlight.addWordEvents(buf.wordEvents);
+
+        // Wrap callback-based play in a Promise to await within the loop
+        const shouldContinue = await new Promise((resolve) => {
+          player.play(audioBuffer, () => {
+            log.log(`para ${paraIndex} playback ended, isPlaying=${controls.isPlaying}`);
+            highlight.stop();
+            if (paraEl) {
+              paraEl.classList.remove("current-para");
+              paraEl.classList.add("played");
+            }
+            buf.audioChunks = [];
+            scheduler.onPlaybackComplete();
+            tryPrefetch();
+            resolve(controls.isPlaying);
+          });
+
+          highlight.start(() => player.getCurrentTimeMs());
+        });
+
+        if (!shouldContinue) return;
+      } catch (err) {
+        log.error(`decode failed para ${paraIndex}:`, err);
+      }
+
+      paraIndex++;
     }
 
-    currentParaIndex = paraIndex;
-    log.log(`playFromParagraph(${paraIndex}/${paragraphs.length - 1})`);
-
-    dom.document.querySelectorAll("[data-para]").forEach((p) => p.classList.remove("current-para"));
-    const paraEl = dom.document.querySelector(`[data-para="${paraIndex}"]`);
-    if (paraEl) paraEl.classList.add("current-para");
-
-    try {
-      await ensureBuffered(paraIndex);
-    } catch {
-      return; // cleanup was called, stop playback silently
-    }
-    tryPrefetch();
-
-    const buf = buffers.get(paraIndex);
-    if (!buf || buf.audioChunks.length === 0) {
-      log.warn(`para ${paraIndex} has no audio chunks, skipping`);
-      await playFromParagraph(paraIndex + 1);
-      return;
-    }
-
-    try {
-      log.log(`para ${paraIndex} decoding ${buf.audioChunks.length} chunks...`);
-      const audioBuffer = await player.decodeAudio(buf.audioChunks);
-      log.log(`para ${paraIndex} decoded, duration=${audioBuffer.duration.toFixed(2)}s, playing`);
-
-      highlight.loadParagraph(paraIndex);
-      highlight.addWordEvents(buf.wordEvents);
-
-      player.play(audioBuffer, async () => {
-        log.log(`para ${paraIndex} playback ended, isPlaying=${controls.isPlaying}`);
-        highlight.stop();
-        if (paraEl) {
-          paraEl.classList.remove("current-para");
-          paraEl.classList.add("played");
-        }
-        buf.audioChunks = [];
-        scheduler.onPlaybackComplete();
-        tryPrefetch();
-
-        if (controls.isPlaying) {
-          await playFromParagraph(paraIndex + 1);
-        }
-      });
-
-      highlight.start(() => player.getCurrentTimeMs());
-    } catch (err) {
-      log.error(`decode failed para ${paraIndex}:`, err);
-      await playFromParagraph(paraIndex + 1);
-    }
+    log.log("all paragraphs finished");
+    controls.setPlaying(false);
   }
 
   // ── Cleanup ─────────────────────────────────────────────────────
