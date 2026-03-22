@@ -44,6 +44,7 @@ export class PrefetchScheduler {
 
     // Per-connection busy tracking: connBusy[i] = paraIndex or null
     this._connBusy = [null, null];
+    this._dispatched = new Set();
   }
 
   /** Number of in-flight (dispatched but not complete) fetches. */
@@ -70,6 +71,13 @@ export class PrefetchScheduler {
   }
 
   getNextFetch() {
+    // Skip indices already dispatched via fetchByIndex
+    while (
+      this._nextFetchIndex < this._paragraphs.length &&
+      this._dispatched.has(this._nextFetchIndex)
+    ) {
+      this._nextFetchIndex++;
+    }
     if (this._nextFetchIndex >= this._paragraphs.length) return null;
 
     const conn = this._freeConn();
@@ -80,9 +88,28 @@ export class PrefetchScheduler {
 
     this._connBusy[conn] = index;
     this._fetchStartTimes.set(index, Date.now());
+    this._dispatched.add(index);
     this._nextFetchIndex++;
 
     return { conn, index, text };
+  }
+
+  fetchByIndex(paraIndex) {
+    if (paraIndex >= this._paragraphs.length) return null;
+    if (this._dispatched.has(paraIndex)) return null;
+
+    const conn = this._freeConn();
+    if (conn === -1) return null;
+
+    this._connBusy[conn] = paraIndex;
+    this._fetchStartTimes.set(paraIndex, Date.now());
+    this._dispatched.add(paraIndex);
+
+    if (paraIndex === this._nextFetchIndex) {
+      this._nextFetchIndex++;
+    }
+
+    return { conn, index: paraIndex, text: this._paragraphs[paraIndex] };
   }
 
   onFetchComplete(paraIndex) {
@@ -110,8 +137,13 @@ export class PrefetchScheduler {
    * that were lost. Preserves metrics and buffered count.
    */
   resetConnections() {
-    // Rewind nextFetchIndex for any in-flight (lost) paragraphs
+    // Remove in-flight indices from _dispatched so they can be re-fetched
     const inFlightIndices = this._connBusy.filter((v) => v !== null);
+    for (const idx of inFlightIndices) {
+      this._dispatched.delete(idx);
+    }
+
+    // Rewind nextFetchIndex for any in-flight (lost) paragraphs
     if (inFlightIndices.length > 0) {
       const minInFlight = Math.min(...inFlightIndices);
       this._nextFetchIndex = Math.min(this._nextFetchIndex, minInFlight);

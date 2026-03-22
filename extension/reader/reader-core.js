@@ -187,7 +187,9 @@ export function createReader(deps) {
       } else if (msg.type === "error") {
         log.error(`TTS error para ${paraIndex}: ${msg.message}`);
         buf.done = true;
+        scheduler.onFetchComplete(paraIndex);
         resolvePending(paraIndex);
+        tryPrefetch();
       }
     });
 
@@ -262,7 +264,7 @@ export function createReader(deps) {
 
     if (!buffers.has(paraIndex)) {
       log.log(`ensureBuffered: para ${paraIndex} not dispatched, dispatching now`);
-      const fetch = scheduler.getNextFetch();
+      const fetch = scheduler.fetchByIndex(paraIndex);
       if (fetch) dispatchFetch(fetch);
     } else {
       log.log(`ensureBuffered: para ${paraIndex} in-flight, waiting for done`);

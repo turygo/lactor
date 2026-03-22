@@ -38,7 +38,13 @@ Firefox MV3 默认 CSP 会强制 `ws://` 升级为 `wss://`，即使用了 `127.
 
 `playFromParagraph(n)` 直接调用 `scheduler.getNextFetch()` 时，如果 prefetcher 已经提前调度了 para n，`getNextFetch` 返回的是 para n+1 而非 para n。
 
-**解决方案**: 引入 `ensureBuffered(paraIndex)` 函数，区分三种状态：已完成（立即 resolve）、in-flight（等 done）、未调度（调度后等）。（`2960ba9`）
+**解决方案**: `ensureBuffered(paraIndex)` 使用 `scheduler.fetchByIndex(paraIndex)` 精确调度指定段落，而非依赖 `getNextFetch()` 的顺序队列。`_dispatched` Set 防止重复调度。（`2960ba9`）
+
+### TTS error 导致连接泄漏
+
+TTS 返回 error 时，error handler 标记 `buf.done = true` 但未调用 `scheduler.onFetchComplete(paraIndex)`，导致连接永久占用在 `_connBusy` 中。若两条连接都泄漏，所有后续 fetch 返回 `null`，播放永久挂起。
+
+**解决方案**: error handler 中补充 `scheduler.onFetchComplete(paraIndex)` 释放连接 + `tryPrefetch()` 触发后续调度，与 done handler 保持一致。
 
 ### WS 断线后 dispatch 不知道连接已断
 

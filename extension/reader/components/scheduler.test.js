@@ -128,6 +128,17 @@ describe("PrefetchScheduler", () => {
       assert.deepEqual(f2, { conn: 0, index: 2, text: "x".repeat(30) });
     });
 
+    it("skips indices already dispatched via fetchByIndex", () => {
+      const s = new PrefetchScheduler(makeParagraphs(10, 20, 30, 40), 3);
+      // Dispatch para 0 out-of-order via fetchByIndex
+      s.fetchByIndex(0);
+      s._fetchStartTimes.set(0, Date.now() - 100);
+      s.onFetchComplete(0);
+      // getNextFetch should skip para 0 and return para 1
+      const f = s.getNextFetch();
+      assert.equal(f.index, 1);
+    });
+
     it("returns null when all paragraphs have been dispatched", () => {
       const s = new PrefetchScheduler(makeParagraphs(10), 3);
       s.getNextFetch(); // para 0
@@ -254,6 +265,73 @@ describe("PrefetchScheduler", () => {
       s.resetConnections();
 
       assert.equal(s.shouldPrefetch(0), true); // connections free, can fetch
+    });
+
+    it("removes in-flight indices from _dispatched so they can be re-fetched", () => {
+      const s = new PrefetchScheduler(makeParagraphs(10, 20, 30), 3);
+      s.getNextFetch(); // para 0, conn 0
+      s.getNextFetch(); // para 1, conn 1
+      assert.equal(s._dispatched.has(0), true);
+      assert.equal(s._dispatched.has(1), true);
+
+      s.resetConnections();
+
+      // In-flight indices cleared from _dispatched
+      assert.equal(s._dispatched.has(0), false);
+      assert.equal(s._dispatched.has(1), false);
+      // Can re-fetch them
+      const f = s.fetchByIndex(0);
+      assert.equal(f.index, 0);
+    });
+  });
+
+  describe("fetchByIndex", () => {
+    it("fetches a specific paragraph index", () => {
+      const s = new PrefetchScheduler(makeParagraphs(10, 20, 30), 3);
+      const f = s.fetchByIndex(1);
+      assert.equal(f.index, 1);
+      assert.equal(f.text, "x".repeat(20));
+      assert.equal(f.conn, 0);
+    });
+
+    it("returns null when both connections are busy", () => {
+      const s = new PrefetchScheduler(makeParagraphs(10, 20, 30), 3);
+      s.getNextFetch(); // conn 0
+      s.getNextFetch(); // conn 1
+      assert.equal(s.fetchByIndex(2), null);
+    });
+
+    it("returns null for out-of-range index", () => {
+      const s = new PrefetchScheduler(makeParagraphs(10), 3);
+      assert.equal(s.fetchByIndex(5), null);
+    });
+
+    it("returns null for already-dispatched index", () => {
+      const s = new PrefetchScheduler(makeParagraphs(10, 20), 3);
+      s.fetchByIndex(0);
+      assert.equal(s.fetchByIndex(0), null);
+    });
+
+    it("advances _nextFetchIndex when fetching the next sequential index", () => {
+      const s = new PrefetchScheduler(makeParagraphs(10, 20, 30), 3);
+      assert.equal(s._nextFetchIndex, 0);
+      s.fetchByIndex(0);
+      assert.equal(s._nextFetchIndex, 1);
+    });
+
+    it("does NOT advance _nextFetchIndex for non-sequential index", () => {
+      const s = new PrefetchScheduler(makeParagraphs(10, 20, 30), 3);
+      assert.equal(s._nextFetchIndex, 0);
+      s.fetchByIndex(2);
+      assert.equal(s._nextFetchIndex, 0);
+    });
+
+    it("marks connection busy and records start time", () => {
+      const s = new PrefetchScheduler(makeParagraphs(10, 20), 3);
+      const before = Date.now();
+      const f = s.fetchByIndex(0);
+      assert.equal(s._connBusy[f.conn], 0);
+      assert.ok(s._fetchStartTimes.get(0) >= before);
     });
   });
 });
