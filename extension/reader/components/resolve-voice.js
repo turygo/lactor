@@ -15,6 +15,7 @@ const PREFERRED = {
 
 export function resolveVoice(lang, voices) {
   if (!voices || voices.length === 0) return null;
+  if (!lang) lang = "";
 
   // Derive the primary language tag (e.g. "zh" from "zh-TW")
   const primaryLang = lang.split("-")[0];
