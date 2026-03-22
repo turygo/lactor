@@ -1,13 +1,58 @@
 import { splitIntoWords } from "./normalizer.js";
 
+const URL_ATTRS = [
+  { sel: "[src]", attr: "src" },
+  { sel: "[href]", attr: "href" },
+  { sel: "[poster]", attr: "poster" },
+  { sel: "[srcset]", attr: "srcset" },
+];
+
+/**
+ * Rebase relative URLs inside a DOM subtree against the original page URL.
+ */
+function rebaseUrls(container, baseUrl) {
+  if (!baseUrl) return;
+  for (const { sel, attr } of URL_ATTRS) {
+    for (const el of container.querySelectorAll(sel)) {
+      if (attr === "srcset") {
+        el.setAttribute(
+          "srcset",
+          el
+            .getAttribute("srcset")
+            .split(",")
+            .map((entry) => {
+              const [url, ...rest] = entry.trim().split(/\s+/);
+              try {
+                return [new URL(url, baseUrl).href, ...rest].join(" ");
+              } catch {
+                return entry;
+              }
+            })
+            .join(", ")
+        );
+      } else {
+        const val = el.getAttribute(attr);
+        if (val && !val.startsWith("data:")) {
+          try {
+            el.setAttribute(attr, new URL(val, baseUrl).href);
+          } catch {
+            /* malformed URL — leave as-is */
+          }
+        }
+      }
+    }
+  }
+}
+
 /**
  * Render typed segments into the content element.
  * Replaces the old renderParagraphs() with segment-type awareness.
  *
  * @param {HTMLElement} contentEl - container to render into
  * @param {Array<{type: string, text?: string, html?: string}>} segments
+ * @param {string} [pageUrl] - original page URL for rebasing relative URLs
  */
-export function renderSegments(contentEl, segments) {
+export function renderSegments(contentEl, segments, pageUrl) {
   contentEl.innerHTML = "";
 
   segments.forEach((segment, i) => {
@@ -36,6 +81,7 @@ export function renderSegments(contentEl, segments) {
 
       if (segment.html) {
         div.innerHTML = segment.html;
+        rebaseUrls(div, pageUrl);
       } else {
         div.textContent = segment.text;
       }

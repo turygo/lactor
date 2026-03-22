@@ -97,7 +97,7 @@ async function init() {
       return;
     }
 
-    renderSegments(contentEl, segments);
+    renderSegments(contentEl, segments, resp.data.url);
 
     if (resp.data.title) {
       const h1 = document.createElement("h1");
@@ -124,7 +124,7 @@ async function init() {
     }
 
     // Fetch fresh voices (updates UI and cache when done)
-    const fresh = await controls.loadVoices(backendPort);
+    const fresh = await controls.loadVoices(backendPort, { skipUI: userChangedVoice });
     if (fresh.length > 0) {
       cacheVoices(fresh, browser.storage.local);
       // Skip auto-selection if user manually changed voice during the fetch

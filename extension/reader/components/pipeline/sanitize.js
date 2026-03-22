@@ -18,6 +18,7 @@ export function sanitize(context) {
   // ── 2. Lightweight content scoring on direct children ─────────
   const HEADING_RE = /^H[1-6]$/;
   const MEDIA_SELECTOR = "img, picture, video, audio, pre, table, figure, svg";
+  const FORMULA_CLASSES = ["math", "katex", "mathjax"];
 
   for (const child of [...body.children]) {
     const text = (child.textContent || "").trim();
@@ -28,6 +29,9 @@ export function sanitize(context) {
 
     // Skip blocks that contain media — structure stage will classify them
     if (child.querySelector(MEDIA_SELECTOR) || child.matches(MEDIA_SELECTOR)) continue;
+
+    // Skip formula blocks — structure stage will classify them
+    if (hasFormulaClass(child, FORMULA_CLASSES)) continue;
 
     // Remove empty blocks
     if (len === 0) {
@@ -61,4 +65,17 @@ export function sanitize(context) {
   }
 
   return context;
+}
+
+/** Check if an element or any descendant has a formula-related class. */
+function hasFormulaClass(el, classes) {
+  const check = (node) => {
+    const cls = typeof node.className === "string" ? node.className.toLowerCase() : "";
+    return classes.some((fc) => cls.includes(fc));
+  };
+  if (check(el)) return true;
+  for (const desc of el.querySelectorAll("*")) {
+    if (check(desc)) return true;
+  }
+  return false;
 }
