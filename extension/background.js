@@ -1,3 +1,10 @@
+import { Logger, isDebugMode } from "./reader/components/logger.js";
+
+let _log = { log() {}, warn() {}, error() {} };
+isDebugMode().then((debug) => {
+  _log = new Logger(debug).scope("background");
+});
+
 const contentStore = new Map();
 const CONTENT_TTL_MS = 60_000;
 
@@ -51,7 +58,7 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === "extraction-failed") {
-    console.warn("Lactor: extraction failed on tab", sender.tab?.id);
+    _log.warn("extraction failed on tab", sender.tab?.id);
     return false;
   }
 });
@@ -63,7 +70,7 @@ browser.action.onClicked.addListener(async (tab) => {
       files: ["lib/defuddle.min.js", "content/extractor.js"],
     });
   } catch (err) {
-    console.error("Failed to inject content scripts:", err);
+    _log.error("failed to inject content scripts:", err);
   }
 });
 

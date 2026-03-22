@@ -34,21 +34,6 @@ export function createReader(deps) {
   const highlight = components.createHighlight();
   let controls = null;
 
-  // Controls need callbacks that reference local functions
-  controls = components.createControls({
-    onPlay: handlePlay,
-    onPause: handlePause,
-    onVoiceChange: (v) => {
-      voice = v;
-      userChangedVoice = true;
-      functions.saveVoicePref(currentLang, v, browser.storage.local);
-    },
-    onClose: () => {
-      cleanup();
-      dom.window.parent.postMessage({ type: "lactor-close" }, "*");
-    },
-  });
-
   // ── init ────────────────────────────────────────────────────────
 
   async function init() {
@@ -60,6 +45,24 @@ export function createReader(deps) {
     }
     const logger = new functions.Logger(debug);
     log = logger.scope("reader");
+
+    // Controls created after logger so we can inject a scoped logger
+    controls = components.createControls(
+      {
+        onPlay: handlePlay,
+        onPause: handlePause,
+        onVoiceChange: (v) => {
+          voice = v;
+          userChangedVoice = true;
+          functions.saveVoicePref(currentLang, v, browser.storage.local);
+        },
+        onClose: () => {
+          cleanup();
+          dom.window.parent.postMessage({ type: "lactor-close" }, "*");
+        },
+      },
+      { log: logger.scope("controls") }
+    );
 
     dom.window.parent.postMessage({ type: "lactor-ready" }, "*");
 

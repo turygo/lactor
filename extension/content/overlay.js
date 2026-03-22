@@ -1,4 +1,9 @@
 (function () {
+  const _log = {
+    warn: (...a) => console.warn("[Lactor:overlay]", ...a),
+    error: (...a) => console.error("[Lactor:overlay]", ...a),
+  };
+
   const EXISTING = document.getElementById("lactor-overlay");
   if (EXISTING) {
     EXISTING.remove();
@@ -7,7 +12,7 @@
 
   const tabId = window.__lactorTabId;
   if (tabId == null) {
-    console.error("Lactor: no tabId set");
+    _log.error("no tabId set");
     return;
   }
 
@@ -46,7 +51,7 @@
   // CSP fallback: if no handshake within 2s, fall back to tab navigation
   const handshakeTimeout = setTimeout(() => {
     if (!handshakeReceived) {
-      console.warn("Lactor: iframe handshake timeout, falling back to tab");
+      _log.warn("iframe handshake timeout, falling back to tab");
       iframe.remove();
       window.removeEventListener("message", onMessage);
       browser.runtime.sendMessage({ type: "fallback-to-tab" });

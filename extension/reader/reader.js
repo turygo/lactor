@@ -29,7 +29,7 @@ const reader = createReader({
   components: {
     createPlayer: () => new Player(),
     createHighlight: () => new HighlightEngine(),
-    createControls: (cbs) => new Controls(cbs),
+    createControls: (cbs, opts) => new Controls(cbs, opts),
     createScheduler: (paras, cap) => new PrefetchScheduler(paras, cap),
   },
   functions: {
