@@ -19,6 +19,7 @@
         title: result.title || document.title,
         content: result.content,
         url: location.href,
+        lang: document.documentElement.lang || "",
       },
     });
   } catch (err) {
