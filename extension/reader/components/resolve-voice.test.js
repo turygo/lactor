@@ -76,4 +76,18 @@ describe("resolveVoice", () => {
     const result = resolveVoice("en", voices);
     assert.equal(typeof result, "string");
   });
+
+  // User preference (3rd argument)
+  it("returns user-preferred voice when it exists in the list", () => {
+    assert.equal(resolveVoice("en", voices, "fr-FR-DeniseNeural"), "fr-FR-DeniseNeural");
+  });
+
+  it("ignores user preference when voice is not in the list (stale pref)", () => {
+    assert.equal(resolveVoice("en", voices, "en-US-RemovedNeural"), "en-US-AriaNeural");
+  });
+
+  it("ignores empty/null user preference", () => {
+    assert.equal(resolveVoice("en", voices, ""), "en-US-AriaNeural");
+    assert.equal(resolveVoice("en", voices, null), "en-US-AriaNeural");
+  });
 });

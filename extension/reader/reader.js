@@ -9,6 +9,7 @@ import { structure } from "./components/pipeline/structure.js";
 import { renderSegments } from "./components/render-segments.js";
 import { resolveVoice } from "./components/resolve-voice.js";
 import { loadCachedVoices, cacheVoices } from "./components/voice-cache.js";
+import { loadVoicePrefs, saveVoicePref } from "./components/voice-prefs.js";
 
 const DEFAULT_PORT = 7890;
 
@@ -16,6 +17,7 @@ let backendPort = DEFAULT_PORT;
 let paragraphs = [];
 let currentParaIndex = 0;
 let voice = "en-US-AriaNeural";
+let currentLang = "en";
 
 const player = new Player();
 const highlight = new HighlightEngine();
@@ -41,6 +43,7 @@ const controls = new Controls({
   onPause: handlePause,
   onVoiceChange: (v) => {
     voice = v;
+    saveVoicePref(currentLang, v, browser.storage.local);
   },
   onClose: () => {
     cleanup();
@@ -101,12 +104,16 @@ async function init() {
     renderSegments(contentEl, segments);
     loadingEl.style.display = "none";
 
+    // Load user preferences and set current language
+    currentLang = ctx.lang || "en";
+    const prefs = await loadVoicePrefs(browser.storage.local);
+    const userPref = prefs[currentLang] || "";
+
     // Cache-first voice loading: use cached voices immediately, refresh in background
-    const lang = ctx.lang || "";
     const cached = await loadCachedVoices(browser.storage.local);
     if (cached && cached.length > 0) {
       controls.populateVoices(cached);
-      const resolved = resolveVoice(lang, cached);
+      const resolved = resolveVoice(currentLang, cached, userPref);
       if (resolved) {
         voice = resolved;
         controls.setVoice(resolved);
@@ -117,7 +124,7 @@ async function init() {
     const fresh = await controls.loadVoices(backendPort);
     if (fresh.length > 0) {
       cacheVoices(fresh, browser.storage.local);
-      const resolved = resolveVoice(lang, fresh);
+      const resolved = resolveVoice(currentLang, fresh, userPref);
       if (resolved) {
         voice = resolved;
         controls.setVoice(resolved);

@@ -3,6 +3,7 @@
  *
  * @param {string} lang - Language code ("en", "zh", "zh-TW", "ja", "ko", …)
  * @param {Array<{name: string, locale: string}>} voices - Voice list from /voices endpoint
+ * @param {string} [userPref] - User's stored preference (highest priority if still in list)
  * @returns {string|null} Voice name string, or null if voices is empty/falsy
  */
 
@@ -13,9 +14,12 @@ const PREFERRED = {
   ko: "ko-KR-SunHiNeural",
 };
 
-export function resolveVoice(lang, voices) {
+export function resolveVoice(lang, voices, userPref) {
   if (!voices || voices.length === 0) return null;
   if (!lang) lang = "";
+
+  // 0. User's stored preference takes highest priority (if voice still exists)
+  if (userPref && voices.some((v) => v.name === userPref)) return userPref;
 
   // Derive the primary language tag (e.g. "zh" from "zh-TW")
   const primaryLang = lang.split("-")[0];
