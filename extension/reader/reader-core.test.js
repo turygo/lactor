@@ -28,7 +28,9 @@ function makeMockPlayer() {
     _currentBuffer: null,
     getCurrentTimeMs: () => 0,
     decodeAudio: mock.fn(async () => ({ duration: 1.0 })),
-    play: mock.fn(() => {}),
+    play: mock.fn((_buf, onEnded) => {
+      if (onEnded) onEnded();
+    }),
     pause: mock.fn(async () => {}),
     resume: mock.fn(async () => {}),
     destroy: mock.fn(),
@@ -635,6 +637,8 @@ describe("createReader", () => {
         audioOffset: 0,
       });
       deps._mocks.mockPort._fire({ type: "done", id: "para-0" });
+      // Buffer para 1 as empty so the while-loop can terminate
+      deps._mocks.mockPort._fire({ type: "done", id: "para-1" });
 
       await reader._playFromParagraph(0);
 
