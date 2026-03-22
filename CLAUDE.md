@@ -84,7 +84,7 @@ Lactor = 本地 Python TTS 后端 + 浏览器扩展，通过 WebSocket 通信，
 | Config | `config.js` | DI 工厂：`createConfig(overrides)`, `loadConfig(storage)` |
 | Proxy | `background.js` | 纯 WS 中转代理，双连接（conn 0/1），接收 `wsEndpoint` URL，零业务逻辑 |
 | Extraction | `content/extractor.js`, `overlay.js` | Defuddle 解析 → background → iframe overlay（CSP 失败自动降级为全标签页） |
-| Orchestration | `reader/reader.js` | 主编排：加载 config → pipeline → 播放 → 高亮 → 预取 |
+| Orchestration | `reader/reader.js`, `reader/reader-core.js` | `reader-core.js`：`createReader(deps)` 工厂，全部编排逻辑（可单元测试）；`reader.js`：薄入口，组装真实依赖并调用 init() |
 | Pipeline | `components/pipeline/` | `sanitize`（噪声过滤）→ `structure`（typed segments + 语言检测） |
 | Playback | `components/player.js`, `highlight.js`, `scheduler.js` | AudioContext 播放、charOffset 二分查找高亮、自适应预取调度 |
 | Voice | `components/voice-cache.js`, `voice-prefs.js`, `resolve-voice.js` | 24h 缓存、per-language 偏好、5 级 fallback 解析链 |
