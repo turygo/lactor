@@ -90,4 +90,20 @@ describe("resolveVoice", () => {
     assert.equal(resolveVoice("en", voices, ""), "en-US-AriaNeural");
     assert.equal(resolveVoice("en", voices, null), "en-US-AriaNeural");
   });
+
+  // Regression: user pref overrides even when lang has an extended tag
+  it("user pref overrides extended-tag resolution", () => {
+    assert.equal(resolveVoice("zh-TW", voices, "zh-CN-XiaoxiaoNeural"), "zh-CN-XiaoxiaoNeural");
+  });
+
+  // Regression: stale pref for different language still falls back correctly
+  it("stale pref with mismatched lang falls through to lang resolution", () => {
+    // User had saved a Japanese voice but voice list changed
+    assert.equal(resolveVoice("ja", voices, "ja-JP-RemovedNeural"), "ja-JP-NanamiNeural");
+  });
+
+  // Regression: user pref with empty voice list returns null
+  it("returns null with user pref but empty voices", () => {
+    assert.equal(resolveVoice("en", [], "en-US-AriaNeural"), null);
+  });
 });

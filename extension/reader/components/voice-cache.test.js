@@ -104,3 +104,28 @@ describe("cacheVoices", () => {
     await assert.doesNotReject(() => cacheVoices(voices, storage));
   });
 });
+
+describe("cache round-trip", () => {
+  it("cacheVoices then loadCachedVoices returns same data", async () => {
+    const store = {};
+    const storage = {
+      get: async (key) => ({ [key]: store[key] }),
+      set: async (data) => Object.assign(store, data),
+    };
+    await cacheVoices(voices, storage);
+    const loaded = await loadCachedVoices(storage);
+    assert.deepEqual(loaded, voices);
+  });
+
+  it("loadCachedVoices returns null after TTL passes (simulated)", async () => {
+    const store = {};
+    const storage = {
+      get: async (key) => ({ [key]: store[key] }),
+      set: async (data) => Object.assign(store, data),
+    };
+    await cacheVoices(voices, storage);
+    // Simulate time passing by mutating cachedAt
+    store.voiceCache.cachedAt -= CACHE_TTL_MS + 1;
+    assert.equal(await loadCachedVoices(storage), null);
+  });
+});
