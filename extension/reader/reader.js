@@ -18,6 +18,7 @@ let paragraphs = [];
 let currentParaIndex = 0;
 let voice = "en-US-AriaNeural";
 let currentLang = "en";
+let userChangedVoice = false;
 
 const player = new Player();
 const highlight = new HighlightEngine();
@@ -43,6 +44,7 @@ const controls = new Controls({
   onPause: handlePause,
   onVoiceChange: (v) => {
     voice = v;
+    userChangedVoice = true;
     saveVoicePref(currentLang, v, browser.storage.local);
   },
   onClose: () => {
@@ -95,13 +97,14 @@ async function init() {
       return;
     }
 
+    renderSegments(contentEl, segments);
+
     if (resp.data.title) {
       const h1 = document.createElement("h1");
       h1.textContent = resp.data.title;
-      contentEl.appendChild(h1);
+      contentEl.prepend(h1);
     }
 
-    renderSegments(contentEl, segments);
     loadingEl.style.display = "none";
 
     // Load user preferences and set current language
@@ -124,10 +127,13 @@ async function init() {
     const fresh = await controls.loadVoices(backendPort);
     if (fresh.length > 0) {
       cacheVoices(fresh, browser.storage.local);
-      const resolved = resolveVoice(currentLang, fresh, userPref);
-      if (resolved) {
-        voice = resolved;
-        controls.setVoice(resolved);
+      // Skip auto-selection if user manually changed voice during the fetch
+      if (!userChangedVoice) {
+        const resolved = resolveVoice(currentLang, fresh, userPref);
+        if (resolved) {
+          voice = resolved;
+          controls.setVoice(resolved);
+        }
       }
     } else if (!cached && controls.selectedVoice) {
       voice = controls.selectedVoice;

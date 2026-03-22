@@ -108,4 +108,13 @@ describe("renderSegments", () => {
     assert.equal(contentEl.children.length, 0);
     assert.equal(contentEl.innerHTML, "");
   });
+
+  it("clears pre-existing children including a title element", () => {
+    const h1 = contentEl.ownerDocument.createElement("h1");
+    h1.textContent = "Title";
+    contentEl.appendChild(h1);
+    renderSegments(contentEl, [{ type: "text", text: "body" }]);
+    assert.equal(contentEl.children.length, 1);
+    assert.equal(contentEl.querySelector("h1"), null);
+  });
 });
