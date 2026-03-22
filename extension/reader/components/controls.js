@@ -62,14 +62,17 @@ export class Controls {
   /**
    * Populate voice dropdown from backend /voices endpoint.
    * @param {number} port - backend port
+   * @param {{ skipUI?: boolean }} [opts] - skip UI rebuild (e.g. when user already changed voice)
    * @returns {Promise<Array<{name: string, locale: string}>>} Loaded voices, or [] on error
    */
-  async loadVoices(port) {
+  async loadVoices(port, opts) {
     try {
       const resp = await fetch(`http://127.0.0.1:${port}/voices`);
       if (!resp.ok) return [];
       const voices = await resp.json();
-      this.populateVoices(voices);
+      if (!opts || !opts.skipUI) {
+        this.populateVoices(voices);
+      }
       return voices;
     } catch (err) {
       console.error("Lactor: failed to load voices", err);
