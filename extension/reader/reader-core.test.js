@@ -54,7 +54,6 @@ function makeMockControls(cbs) {
     isPlaying: true,
     selectedVoice: "en-US-AriaNeural",
     populateVoices: mock.fn(),
-    loadVoices: mock.fn(async () => []),
     setVoice: mock.fn(),
     setPlaying: mock.fn(),
   };
@@ -142,6 +141,7 @@ function makeDeps(overrides = {}) {
       resolveVoice: mock.fn(() => "en-US-AriaNeural"),
       loadCachedVoices: mock.fn(async () => [{ name: "en-US-AriaNeural", locale: "en-US" }]),
       cacheVoices: mock.fn(),
+      fetchVoices: mock.fn(async () => []),
       loadVoicePrefs: mock.fn(async () => ({})),
       saveVoicePref: mock.fn(),
       isDebugMode: mock.fn(async () => false),
@@ -335,34 +335,26 @@ describe("createReader", () => {
 
     it("skips auto-selection when user changed voice during fetch", async () => {
       const deps = makeDeps();
-      // loadVoices returns fresh voices
       deps.functions.loadCachedVoices = mock.fn(async () => [
         { name: "en-US-AriaNeural", locale: "en-US" },
       ]);
-      createReader(deps);
-      // We need controls to exist before simulating voice change
-      // The trick: make loadVoices slow enough that we can trigger onVoiceChange
-      let loadVoicesResolve;
+      // Make fetchVoices slow enough that we can trigger onVoiceChange before it resolves
+      let fetchVoicesResolve;
       const freshVoices = [{ name: "en-US-GuyNeural", locale: "en-US" }];
-      deps.components.createControls = (cbs) => {
-        const ctrl = makeMockControls(cbs);
-        ctrl.loadVoices = mock.fn(
-          () =>
-            new Promise((resolve) => {
-              loadVoicesResolve = () => resolve(freshVoices);
-            })
-        );
-        deps._mocks = { ...deps._mocks, mockControls: ctrl };
-        return ctrl;
-      };
+      deps.functions.fetchVoices = mock.fn(
+        () =>
+          new Promise((resolve) => {
+            fetchVoicesResolve = () => resolve(freshVoices);
+          })
+      );
 
       const initPromise = createReader(deps).init();
       // Wait for cache-based voice to be set, then simulate user changing voice
       await new Promise((r) => setTimeout(r, 10));
-      if (loadVoicesResolve) {
+      if (fetchVoicesResolve) {
         // Simulate user changed voice before fresh voices arrive
         deps._mocks.mockControls._cbs.onVoiceChange("ja-JP-NanamiNeural");
-        loadVoicesResolve();
+        fetchVoicesResolve();
       }
       await initPromise;
 
@@ -378,9 +370,9 @@ describe("createReader", () => {
       const deps = makeDeps();
       deps.functions.loadCachedVoices = mock.fn(async () => null);
       deps.functions.resolveVoice = mock.fn(() => null);
+      deps.functions.fetchVoices = mock.fn(async () => []);
       deps.components.createControls = (cbs) => {
         const ctrl = makeMockControls(cbs);
-        ctrl.loadVoices = mock.fn(async () => []);
         ctrl.selectedVoice = "fallback-voice";
         deps._mocks = { ...deps._mocks, mockControls: ctrl };
         return ctrl;
