@@ -370,7 +370,7 @@ export function createReader(deps) {
               paraEl.classList.remove("current-para");
               paraEl.classList.add("played");
             }
-            buf.audioChunks = [];
+            buffers.delete(paraIndex);
             scheduler.onPlaybackComplete();
             tryPrefetch();
             resolve(controls.isPlaying);
