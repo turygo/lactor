@@ -89,7 +89,7 @@ Lactor = 本地 Python TTS 后端 + 浏览器扩展，通过 WebSocket 通信，
 | Playback | `components/player.js`, `highlight.js`, `scheduler.js` | AudioContext 播放、charOffset 二分查找高亮、自适应预取调度 |
 | Voice | `components/voice-cache.js`, `voice-prefs.js`, `resolve-voice.js` | 24h 缓存、per-language 偏好、5 级 fallback 解析链 |
 | UI | `components/controls.js`, `render-segments.js` | 播放控制、分段渲染 + URL rebasing |
-| Infra | `components/logger.js`, `normalizer.js` | 分级日志、文本规范化 |
+| Infra | `components/logger.js`, `normalizer.js` | 分级日志（`storage.local` debug 开关）、文本规范化 |
 
 ## Conventions
 
@@ -114,6 +114,7 @@ Server → Client:  { type: "audio"|"word"|"done"|"error", id, ... }
 - 修改播放 / 高亮 / 预取 / voice → `@docs/ref/extension-playback.md`
 - 修改 WS 通信协议 → `@docs/ref/ws-protocol.md`
 - 遇到非显而易见的坑 → 更新 `@docs/ref/gotchas.md`
+- 修改权限声明 → 更新 `@docs/ref/permissions.md`
 
 ## Docs Archiving
 

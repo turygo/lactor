@@ -69,6 +69,13 @@
     <label for="port">Backend Port</label>
     <input type="number" id="port" min="1024" max="65535" value="7890" />
     <button id="save">Save</button>
+    <hr style="margin: 12px 0; border: none; border-top: 1px solid #eee" />
+    <label
+      style="display: flex; align-items: center; gap: 6px; font-weight: normal; cursor: pointer"
+    >
+      <input type="checkbox" id="debug" />
+      Debug logging
+    </label>
     <div id="status" class="status" style="display: none"></div>
     <div class="ext-id">Extension ID: <code id="ext-id"></code></div>
     <script type="module" src="popup.js"></script>

@@ -120,8 +120,8 @@ edge-tts 返回的 offset 和 duration 是 100 纳秒为单位的 ticks，不是
 
 **解决方案**: `test_tts.py` 添加 `autouse` fixture，在每个测试前清除 `LACTOR_MOCK_TTS` 环境变量。（`3eb106d`）
 
-### management API 不可用导致 logger 静默
+### management API 不可用导致 logger 静默（已解决）
 
-`isDebugMode()` 依赖 `browser.management.getSelf()`，在某些环境（如临时 tab）不可用。默认 fallback 为 `false` 会导致所有日志静默，无法调试。
+`isDebugMode()` 原依赖 `browser.management.getSelf()`，在某些环境不可用，且需要 `management` 权限（权限范围过大）。
 
-**解决方案**: 默认 fallback 改为 `true`（宁可多日志，不可无日志）。同时在 init 中添加一条无条件 `console.log` 确保至少有一行输出。（`b2b2d0f`）
+**解决方案**: 改用 `browser.storage.local` 开关——读取 `debug` 标志（默认 `false`），开发者通过 `browser.storage.local.set({debug: true})` 启用。使用已有的 `storage` 权限，跨浏览器可靠，同时保留 fallback-to-true 策略（非扩展环境下默认启用日志）。`management` 权限已从 manifest 中移除。（issue #13）
