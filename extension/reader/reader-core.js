@@ -120,10 +120,11 @@ export function createReader(deps) {
         }
       }
 
-      const fresh = await controls.loadVoices(config, { skipUI: userChangedVoice });
+      const fresh = await functions.fetchVoices(config);
       if (fresh.length > 0) {
         functions.cacheVoices(fresh, browser.storage.local);
         if (!userChangedVoice) {
+          controls.populateVoices(fresh);
           const resolved = functions.resolveVoice(currentLang, fresh, userPref);
           if (resolved) {
             voice = resolved;
