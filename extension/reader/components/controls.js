@@ -61,27 +61,6 @@ export class Controls {
   }
 
   /**
-   * Populate voice dropdown from backend /voices endpoint.
-   * @param {{ httpUrl: function }} config - config object with httpUrl method
-   * @param {{ skipUI?: boolean }} [opts] - skip UI rebuild (e.g. when user already changed voice)
-   * @returns {Promise<Array<{name: string, locale: string}>>} Loaded voices, or [] on error
-   */
-  async loadVoices(config, opts) {
-    try {
-      const resp = await fetch(config.httpUrl("/voices"));
-      if (!resp.ok) return [];
-      const voices = await resp.json();
-      if (!opts || !opts.skipUI) {
-        this.populateVoices(voices);
-      }
-      return voices;
-    } catch (err) {
-      this._log.error("failed to load voices", err);
-      return [];
-    }
-  }
-
-  /**
    * Set the selected voice in the dropdown programmatically.
    * @param {string} name - Voice name to select
    */

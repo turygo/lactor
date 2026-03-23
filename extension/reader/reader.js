@@ -43,6 +43,15 @@ const reader = createReader({
     cacheVoices,
     loadVoicePrefs,
     saveVoicePref,
+    fetchVoices: async (config) => {
+      try {
+        const resp = await fetch(config.httpUrl("/voices"));
+        if (!resp.ok) return [];
+        return resp.json();
+      } catch {
+        return [];
+      }
+    },
     isDebugMode,
     Logger,
   },
