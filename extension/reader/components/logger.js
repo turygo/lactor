@@ -55,29 +55,16 @@ class ScopedLogger {
 
 /**
  * Detect if extension is loaded in debug/development mode.
- * Uses browser.management.getSelf() — requires "management" permission.
- * Falls back to true if API unavailable (safe default for development).
+ * Reads `debug` flag from browser.storage.local (default: false).
+ * Developers enable via: browser.storage.local.set({ debug: true })
+ * Falls back to true outside extension context (e.g. tests, plain browser).
  */
 export async function isDebugMode() {
   try {
-    if (typeof browser === "undefined") {
-      console.log("[Lactor:debugDetect] browser is undefined (not in extension context)");
-      return true;
-    }
-    if (!browser.management) {
-      console.log("[Lactor:debugDetect] browser.management is unavailable");
-      return true;
-    }
-    if (!browser.management.getSelf) {
-      console.log("[Lactor:debugDetect] browser.management.getSelf is unavailable");
-      return true;
-    }
-    const self = await browser.management.getSelf();
-    const result = self.installType === "development";
-    console.log("[Lactor:debugDetect] installType =", self.installType, "→ debug =", result);
-    return result;
-  } catch (e) {
-    console.log("[Lactor:debugDetect] caught error:", e.message || e);
+    if (typeof browser === "undefined") return true;
+    const result = await browser.storage.local.get("debug");
+    return result.debug === true;
+  } catch {
     return true;
   }
 }

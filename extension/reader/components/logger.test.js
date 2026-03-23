@@ -1,6 +1,6 @@
-import { describe, it } from "node:test";
+import { describe, it, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { Logger } from "./logger.js";
+import { Logger, isDebugMode } from "./logger.js";
 
 describe("Logger", () => {
   it("logs nothing when disabled", () => {
@@ -65,5 +65,50 @@ describe("Logger", () => {
     const scoped = logger.scope("reader");
     scoped.log("should not appear");
     assert.equal(output.length, 0);
+  });
+});
+
+describe("isDebugMode", () => {
+  afterEach(() => {
+    delete globalThis.browser;
+  });
+
+  it("returns true when browser global is undefined", async () => {
+    delete globalThis.browser;
+    assert.equal(await isDebugMode(), true);
+  });
+
+  it("returns false when debug flag is not set", async () => {
+    globalThis.browser = {
+      storage: { local: { get: async () => ({}) } },
+    };
+    assert.equal(await isDebugMode(), false);
+  });
+
+  it("returns true when debug flag is true", async () => {
+    globalThis.browser = {
+      storage: { local: { get: async () => ({ debug: true }) } },
+    };
+    assert.equal(await isDebugMode(), true);
+  });
+
+  it("returns false when debug flag is explicitly false", async () => {
+    globalThis.browser = {
+      storage: { local: { get: async () => ({ debug: false }) } },
+    };
+    assert.equal(await isDebugMode(), false);
+  });
+
+  it("returns true when storage.local.get throws", async () => {
+    globalThis.browser = {
+      storage: {
+        local: {
+          get: async () => {
+            throw new Error("not available");
+          },
+        },
+      },
+    };
+    assert.equal(await isDebugMode(), true);
   });
 });

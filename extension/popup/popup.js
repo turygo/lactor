@@ -3,12 +3,18 @@ import { loadConfig, createConfig } from "../config.js";
 const portInput = document.getElementById("port");
 const saveBtn = document.getElementById("save");
 const statusDiv = document.getElementById("status");
+const debugCheckbox = document.getElementById("debug");
 const extIdEl = document.getElementById("ext-id");
 
 extIdEl.textContent = browser.runtime.id;
 
-browser.storage.local.get("port").then((result) => {
+browser.storage.local.get(["port", "debug"]).then((result) => {
   if (result.port) portInput.value = result.port;
+  debugCheckbox.checked = result.debug === true;
+});
+
+debugCheckbox.addEventListener("change", () => {
+  browser.storage.local.set({ debug: debugCheckbox.checked });
 });
 
 saveBtn.addEventListener("click", async () => {
