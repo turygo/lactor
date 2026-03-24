@@ -3,6 +3,7 @@ import { HighlightEngine } from "./components/highlight.js";
 import { Player } from "./components/player.js";
 import { Controls } from "./components/controls.js";
 import { PrefetchScheduler } from "./components/scheduler.js";
+import { createPlaybackState } from "./components/playback-state.js";
 import { Logger, isDebugMode } from "./components/logger.js";
 import { createPipeline } from "./components/pipeline/index.js";
 import { sanitize } from "./components/pipeline/sanitize.js";
@@ -31,6 +32,7 @@ const reader = createReader({
     createHighlight: () => new HighlightEngine(),
     createControls: (cbs, opts) => new Controls(cbs, opts),
     createScheduler: (paras, cap) => new PrefetchScheduler(paras, cap),
+    createPlaybackState: (opts) => createPlaybackState(opts),
   },
   functions: {
     loadConfig,
