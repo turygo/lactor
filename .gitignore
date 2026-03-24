@@ -9,3 +9,4 @@ node_modules/
 _bmad/
 benchmark/reports/
 .worktrees
+.claude/skills/bmad*

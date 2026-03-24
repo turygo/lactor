@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 
 const { createReader } = await import("./reader-core.js");
+const { createPlaybackState } = await import("./components/playback-state.js");
 
 // ── Mock helpers ────────────────────────────────────────────────
 
@@ -120,6 +121,7 @@ function makeDeps(overrides = {}) {
         return mockControls;
       },
       createScheduler: () => mockScheduler,
+      createPlaybackState: (opts) => createPlaybackState(opts),
     },
     functions: {
       loadConfig: mock.fn(async () => ({
