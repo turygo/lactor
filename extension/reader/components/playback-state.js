@@ -37,6 +37,18 @@ export function createPlaybackState({ paragraphCount, log } = {}) {
     error: { retry: "loading", cancel: "idle" },
   };
 
+  // Index side-effects per transition event — single source of truth
+  // for how transitions affect _currentIndex and _targetIndex.
+  const _effects = {
+    cancel: () => {
+      _targetIndex = null;
+    },
+    finished: () => {
+      _currentIndex = 0;
+      _targetIndex = null;
+    },
+  };
+
   // ── Core API ──────────────────────────────────────────────────
 
   function transition(event) {
@@ -48,21 +60,24 @@ export function createPlaybackState({ paragraphCount, log } = {}) {
     const from = _state;
     _state = allowed[event];
 
-    // Reset target on cancel
-    if (event === "cancel") {
-      _targetIndex = null;
-    }
+    const effect = _effects[event];
+    if (effect) effect();
 
-    // When finishing all paragraphs, reset index
-    if (event === "finished") {
-      _currentIndex = 0;
-      _targetIndex = null;
-    }
-
-    _emit("stateChange", { from, to: _state, event, currentIndex: _currentIndex, targetIndex: _targetIndex });
+    _emit("stateChange", {
+      from,
+      to: _state,
+      event,
+      currentIndex: _currentIndex,
+      targetIndex: _targetIndex,
+    });
     return true;
   }
 
+  /**
+   * Navigate to a specific paragraph.
+   * Sets targetIndex, then delegates to the appropriate transition.
+   * advanceIndex() will later consume targetIndex to set currentIndex.
+   */
   function goTo(index) {
     if (index < 0 || index >= _paragraphCount) {
       _log.warn(`goTo: index ${index} out of range [0, ${_paragraphCount})`);
@@ -71,17 +86,10 @@ export function createPlaybackState({ paragraphCount, log } = {}) {
 
     _targetIndex = index;
 
-    // From idle, goTo acts as play (idle → loading)
-    if (_state === "idle") {
-      return transition("play");
-    }
+    if (_state === "idle") return transition("play");
+    if (_state === "playing" || _state === "paused") return transition("jump");
 
-    // From playing/paused, goTo triggers jump (→ loading)
-    if (_state === "playing" || _state === "paused") {
-      return transition("jump");
-    }
-
-    // From loading, just update target (already loading)
+    // Already loading — just retarget without state change
     if (_state === "loading") {
       _emit("stateChange", {
         from: "loading",
@@ -97,6 +105,11 @@ export function createPlaybackState({ paragraphCount, log } = {}) {
     return false;
   }
 
+  /**
+   * Advance to the next segment.
+   * Consumes targetIndex (from goTo) if set, otherwise increments sequentially.
+   * Returns true if the new index is within bounds.
+   */
   function advanceIndex() {
     if (_targetIndex !== null) {
       _currentIndex = _targetIndex;
