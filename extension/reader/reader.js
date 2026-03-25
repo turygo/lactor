@@ -1,4 +1,5 @@
 import { createReader } from "./reader-core.js";
+import { createReaderUI } from "./components/reader-ui.js";
 import { HighlightEngine } from "./components/highlight.js";
 import { Player } from "./components/player.js";
 import { Controls } from "./components/controls.js";
@@ -15,11 +16,14 @@ import { loadVoicePrefs, saveVoicePref } from "./components/voice-prefs.js";
 import { loadConfig } from "../config.js";
 
 const reader = createReader({
-  dom: {
+  ui: createReaderUI({
     contentEl: document.getElementById("content"),
     loadingEl: document.getElementById("loading"),
     errorEl: document.getElementById("error"),
     document,
+    renderSegments,
+  }),
+  env: {
     window,
     location,
   },
@@ -39,7 +43,6 @@ const reader = createReader({
     createPipeline,
     sanitize,
     structure,
-    renderSegments,
     resolveVoice,
     loadCachedVoices,
     cacheVoices,

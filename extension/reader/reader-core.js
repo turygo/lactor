@@ -1,18 +1,19 @@
 /**
  * createReader(deps) — testable orchestrator factory for the Lactor reader view.
  *
- * All DOM, browser API, and component dependencies are injected via `deps`.
+ * All browser API, UI, and component dependencies are injected via `deps`.
  * The thin entry point (reader.js) wires real dependencies and calls init().
  *
  * @param {object} deps
- * @param {object} deps.dom           — DOM elements and globals
+ * @param {object} deps.ui            — ReaderUI interface (showLoading, showError, markCurrent, etc.)
+ * @param {object} deps.env           — window (postMessage) and location (search params)
  * @param {object} deps.browser       — browser.runtime / browser.storage
  * @param {object} deps.components    — factory functions for Player, Highlight, Controls, Scheduler, PlaybackState
  * @param {object} deps.functions     — pure functions (pipeline, voice, config, etc.)
  * @returns {{ init(): Promise<void>, cleanup(): void, _ensureBuffered(i): Promise<void>, _dispatchFetch(f): void, _playFromParagraph(i): Promise<void> }}
  */
 export function createReader(deps) {
-  const { dom, browser, components, functions } = deps;
+  const { ui, env, browser, components, functions } = deps;
 
   // ── Internal state ──────────────────────────────────────────────
   let config = null;
@@ -66,7 +67,7 @@ export function createReader(deps) {
         },
         onClose: () => {
           cleanup();
-          dom.window.parent.postMessage({ type: "lactor-close" }, "*");
+          env.window.parent.postMessage({ type: "lactor-close" }, "*");
         },
       },
       { log: logger.scope("controls") }
@@ -78,22 +79,22 @@ export function createReader(deps) {
       controls.setPlaying(playing);
     });
 
-    dom.window.parent.postMessage({ type: "lactor-ready" }, "*");
+    env.window.parent.postMessage({ type: "lactor-ready" }, "*");
 
     config = await functions.loadConfig(browser.storage.local);
 
-    const params = new URLSearchParams(dom.location.search);
+    const params = new URLSearchParams(env.location.search);
     const tabId = parseInt(params.get("tabId"), 10);
     if (isNaN(tabId)) {
-      showError("Invalid tab ID");
+      ui.showError("Invalid tab ID");
       return;
     }
 
-    dom.loadingEl.style.display = "block";
+    ui.showLoading();
     try {
       const resp = await browser.runtime.sendMessage({ type: "getContent", tabId });
       if (!resp || !resp.data) {
-        showError("No content available. Try clicking the Lactor icon again.");
+        ui.showError("No content available. Try clicking the Lactor icon again.");
         return;
       }
 
@@ -103,22 +104,16 @@ export function createReader(deps) {
       paragraphs = segments.map((s) => s.text);
 
       if (paragraphs.length === 0) {
-        showError("Could not extract readable text from this page.");
+        ui.showError("Could not extract readable text from this page.");
         return;
       }
 
       // Update state machine with actual paragraph count
       playbackState.paragraphCount = paragraphs.length;
 
-      functions.renderSegments(dom.contentEl, segments, resp.data.url);
-
-      if (resp.data.title) {
-        const h1 = dom.document.createElement("h1");
-        h1.textContent = resp.data.title;
-        dom.contentEl.prepend(h1);
-      }
-
-      dom.loadingEl.style.display = "none";
+      ui.renderContent(segments, resp.data.url);
+      ui.setTitle(resp.data.title);
+      ui.hideLoading();
 
       // Voice resolution: cache-first, then fresh
       currentLang = ctx.lang || "en";
@@ -153,16 +148,8 @@ export function createReader(deps) {
       scheduler = components.createScheduler(paragraphs, 3);
       connectToBg();
     } catch (err) {
-      showError(`Failed to load content: ${err.message}`);
+      ui.showError(`Failed to load content: ${err.message}`);
     }
-  }
-
-  // ── UI helpers ──────────────────────────────────────────────────
-
-  function showError(msg) {
-    dom.loadingEl.style.display = "none";
-    dom.errorEl.textContent = msg;
-    dom.errorEl.style.display = "block";
   }
 
   // ── Port communication ──────────────────────────────────────────
@@ -306,16 +293,12 @@ export function createReader(deps) {
 
   function tryPrefetch() {
     if (!scheduler) return;
-    const remainingMs = getRemainingPlaybackMs();
+    const remainingMs = player.getRemainingMs();
     while (scheduler.shouldPrefetch(remainingMs)) {
       const next = scheduler.getNextFetch();
       if (!next) break;
       dispatchFetch(next);
     }
-  }
-
-  function getRemainingPlaybackMs() {
-    return player.getRemainingMs();
   }
 
   // ── Playback ────────────────────────────────────────────────────
@@ -357,94 +340,95 @@ export function createReader(deps) {
     highlight.stop();
   }
 
+  /**
+   * Play a single segment: buffer → decode → play → wait for end.
+   * Returns { shouldContinue, skipped } to let the caller drive the loop.
+   */
+  async function playSingleSegment(paraIndex) {
+    log.log(`playSingleSegment(${paraIndex}/${paragraphs.length - 1})`);
+    ui.markCurrent(paraIndex);
+
+    // Ensure we're in loading state
+    if (playbackState.state !== "loading") {
+      if (!playbackState.transition("play")) return { shouldContinue: false };
+    }
+
+    try {
+      await ensureBuffered(paraIndex);
+    } catch {
+      return { shouldContinue: false }; // cleanup was called
+    }
+
+    // Bail out if cancelled/paused during loading
+    if (playbackState.state !== "loading") return { shouldContinue: false };
+
+    tryPrefetch();
+
+    const buf = buffers.get(paraIndex);
+    if (!buf || buf.audioChunks.length === 0) {
+      log.warn(`para ${paraIndex} has no audio chunks, skipping`);
+      return { shouldContinue: true, skipped: true };
+    }
+
+    try {
+      log.log(`para ${paraIndex} decoding ${buf.audioChunks.length} chunks...`);
+      const audioBuffer = await player.decodeAudio(buf.audioChunks);
+      log.log(`para ${paraIndex} decoded, duration=${audioBuffer.duration.toFixed(2)}s, playing`);
+
+      playbackState.transition("buffered");
+
+      highlight.loadParagraph(paraIndex);
+      highlight.addWordEvents(buf.wordEvents);
+
+      const shouldContinue = await new Promise((resolve) => {
+        player.play(audioBuffer, () => {
+          log.log(`para ${paraIndex} playback ended, isPlaying=${playbackState.isPlaying}`);
+          highlight.stop();
+          ui.markPlayed(paraIndex);
+          buffers.delete(paraIndex);
+          scheduler.onPlaybackComplete();
+          tryPrefetch();
+          resolve(playbackState.isPlaying);
+        });
+
+        highlight.start(() => player.getCurrentTimeMs());
+      });
+
+      return { shouldContinue };
+    } catch (err) {
+      log.error(`decode failed para ${paraIndex}:`, err);
+      playbackState.transition("error");
+      playbackState.transition("cancel");
+      return { shouldContinue: false };
+    }
+  }
+
   async function playFromParagraph(startIndex) {
     let paraIndex = startIndex;
 
     while (paraIndex < paragraphs.length) {
-      log.log(`playFromParagraph(${paraIndex}/${paragraphs.length - 1})`);
+      const result = await playSingleSegment(paraIndex);
 
-      dom.document
-        .querySelectorAll("[data-para]")
-        .forEach((p) => p.classList.remove("current-para"));
-      const paraEl = dom.document.querySelector(`[data-para="${paraIndex}"]`);
-      if (paraEl) paraEl.classList.add("current-para");
+      if (!result.shouldContinue) return;
 
-      // Ensure we're in loading state for this segment
-      if (playbackState.state !== "loading") {
-        if (!playbackState.transition("play")) return;
-      }
-
-      try {
-        await ensureBuffered(paraIndex);
-      } catch {
-        return; // cleanup was called, stop playback silently
-      }
-
-      // Bail out if cancelled/paused during loading
-      if (playbackState.state !== "loading") return;
-
-      tryPrefetch();
-
-      const buf = buffers.get(paraIndex);
-      if (!buf || buf.audioChunks.length === 0) {
-        log.warn(`para ${paraIndex} has no audio chunks, skipping`);
+      if (result.skipped) {
         playbackState.advanceIndex();
         paraIndex = playbackState.currentIndex;
         continue;
       }
 
-      try {
-        log.log(`para ${paraIndex} decoding ${buf.audioChunks.length} chunks...`);
-        const audioBuffer = await player.decodeAudio(buf.audioChunks);
-        log.log(`para ${paraIndex} decoded, duration=${audioBuffer.duration.toFixed(2)}s, playing`);
-
-        // Transition to playing
-        playbackState.transition("buffered");
-
-        highlight.loadParagraph(paraIndex);
-        highlight.addWordEvents(buf.wordEvents);
-
-        // Wrap callback-based play in a Promise to await within the loop
-        const shouldContinue = await new Promise((resolve) => {
-          player.play(audioBuffer, () => {
-            log.log(`para ${paraIndex} playback ended, isPlaying=${playbackState.isPlaying}`);
-            highlight.stop();
-            if (paraEl) {
-              paraEl.classList.remove("current-para");
-              paraEl.classList.add("played");
-            }
-            buffers.delete(paraIndex);
-            scheduler.onPlaybackComplete();
-            tryPrefetch();
-            resolve(playbackState.isPlaying);
-          });
-
-          highlight.start(() => player.getCurrentTimeMs());
-        });
-
-        if (!shouldContinue) return;
-
-        // Last paragraph: use "finished" to return to idle
-        const hasMore = playbackState.advanceIndex();
-        if (!hasMore) {
-          playbackState.transition("finished");
-          return;
-        }
-
-        // More paragraphs: transition to loading for next segment
-        playbackState.transition("ended");
-        paraIndex = playbackState.currentIndex;
-      } catch (err) {
-        log.error(`decode failed para ${paraIndex}:`, err);
-        playbackState.transition("error");
-        playbackState.transition("cancel");
-        playbackState.advanceIndex();
-        paraIndex = playbackState.currentIndex;
+      // Segment played successfully — advance
+      const hasMore = playbackState.advanceIndex();
+      if (!hasMore) {
+        playbackState.transition("finished");
+        return;
       }
+
+      playbackState.transition("ended");
+      paraIndex = playbackState.currentIndex;
     }
 
     log.log("all paragraphs finished");
-    // Reach idle from whatever state we're in
     if (!playbackState.transition("finished") && !playbackState.transition("cancel")) {
       controls.setPlaying(false);
     }
