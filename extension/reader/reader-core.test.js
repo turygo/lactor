@@ -1,6 +1,5 @@
 import { describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
-import { JSDOM } from "jsdom";
 
 const { createReader } = await import("./reader-core.js");
 const { createPlaybackState } = await import("./components/playback-state.js");
@@ -71,26 +70,29 @@ function makeMockScheduler() {
   };
 }
 
-function makeDeps(overrides = {}) {
-  const dom = new JSDOM(`<!DOCTYPE html><html><body>
-    <div id="loading" style="display:none"></div>
-    <div id="error" style="display:none"></div>
-    <article id="content"></article>
-  </body></html>`);
-  const doc = dom.window.document;
+function makeMockUI() {
+  return {
+    showLoading: mock.fn(),
+    hideLoading: mock.fn(),
+    showError: mock.fn(),
+    renderContent: mock.fn(),
+    setTitle: mock.fn(),
+    markCurrent: mock.fn(),
+    markPlayed: mock.fn(),
+  };
+}
 
+function makeDeps(overrides = {}) {
   const mockPort = makeMockPort();
   const mockPlayer = makeMockPlayer();
   const mockHighlight = makeMockHighlight();
   let mockControls;
   const mockScheduler = makeMockScheduler();
+  const mockUI = makeMockUI();
 
   const deps = {
-    dom: {
-      contentEl: doc.getElementById("content"),
-      loadingEl: doc.getElementById("loading"),
-      errorEl: doc.getElementById("error"),
-      document: doc,
+    ui: mockUI,
+    env: {
       window: {
         parent: { postMessage: mock.fn() },
         addEventListener: mock.fn(),
@@ -161,11 +163,13 @@ function makeDeps(overrides = {}) {
       mockPlayer,
       mockHighlight,
       mockScheduler,
+      mockUI,
     },
   };
 
   // Apply overrides (shallow merge per category)
-  if (overrides.dom) Object.assign(deps.dom, overrides.dom);
+  if (overrides.ui) Object.assign(deps.ui, overrides.ui);
+  if (overrides.env) Object.assign(deps.env, overrides.env);
   if (overrides.browser) {
     if (overrides.browser.runtime) Object.assign(deps.browser.runtime, overrides.browser.runtime);
     if (overrides.browser.storage) Object.assign(deps.browser.storage, overrides.browser.storage);
@@ -183,7 +187,7 @@ describe("createReader", () => {
       const deps = makeDeps();
       const reader = createReader(deps);
       await reader.init();
-      const calls = deps.dom.window.parent.postMessage.mock.calls;
+      const calls = deps.env.window.parent.postMessage.mock.calls;
       assert.ok(calls.some((c) => c.arguments[0].type === "lactor-ready"));
     });
 
@@ -202,30 +206,29 @@ describe("createReader", () => {
       assert.deepEqual(call.arguments[0], { type: "getContent", tabId: 42 });
     });
 
-    it("runs pipeline and renders segments", async () => {
+    it("calls ui.renderContent with segments and url", async () => {
       const deps = makeDeps();
       const reader = createReader(deps);
       await reader.init();
-      assert.equal(deps.functions.renderSegments.mock.callCount(), 1);
-      const args = deps.functions.renderSegments.mock.calls[0].arguments;
-      assert.equal(args[0], deps.dom.contentEl); // contentEl
-      assert.equal(args[1].length, 2); // 2 segments
+      assert.equal(deps._mocks.mockUI.renderContent.mock.callCount(), 1);
+      const args = deps._mocks.mockUI.renderContent.mock.calls[0].arguments;
+      assert.equal(args[0].length, 2); // 2 segments
+      assert.equal(args[1], "https://example.com");
     });
 
-    it("prepends title h1 when title exists", async () => {
+    it("calls ui.setTitle with page title", async () => {
       const deps = makeDeps();
       const reader = createReader(deps);
       await reader.init();
-      const h1 = deps.dom.contentEl.querySelector("h1");
-      assert.ok(h1);
-      assert.equal(h1.textContent, "Test Title");
+      assert.equal(deps._mocks.mockUI.setTitle.mock.callCount(), 1);
+      assert.equal(deps._mocks.mockUI.setTitle.mock.calls[0].arguments[0], "Test Title");
     });
 
     it("hides loading indicator after content loads", async () => {
       const deps = makeDeps();
       const reader = createReader(deps);
       await reader.init();
-      assert.equal(deps.dom.loadingEl.style.display, "none");
+      assert.equal(deps._mocks.mockUI.hideLoading.mock.callCount(), 1);
     });
 
     it("connects to background after successful init", async () => {
@@ -275,11 +278,11 @@ describe("createReader", () => {
 
   describe("init — error paths", () => {
     it("shows error for invalid tabId", async () => {
-      const deps = makeDeps({ dom: { location: { search: "?tabId=abc" } } });
+      const deps = makeDeps({ env: { location: { search: "?tabId=abc" } } });
       const reader = createReader(deps);
       await reader.init();
-      assert.equal(deps.dom.errorEl.style.display, "block");
-      assert.match(deps.dom.errorEl.textContent, /Invalid tab ID/);
+      assert.equal(deps._mocks.mockUI.showError.mock.callCount(), 1);
+      assert.match(deps._mocks.mockUI.showError.mock.calls[0].arguments[0], /Invalid tab ID/);
     });
 
     it("shows error when sendMessage returns null", async () => {
@@ -287,7 +290,7 @@ describe("createReader", () => {
       deps.browser.runtime.sendMessage = mock.fn(async () => null);
       const reader = createReader(deps);
       await reader.init();
-      assert.match(deps.dom.errorEl.textContent, /No content available/);
+      assert.match(deps._mocks.mockUI.showError.mock.calls[0].arguments[0], /No content available/);
     });
 
     it("shows error when sendMessage returns no data", async () => {
@@ -295,7 +298,7 @@ describe("createReader", () => {
       deps.browser.runtime.sendMessage = mock.fn(async () => ({ data: null }));
       const reader = createReader(deps);
       await reader.init();
-      assert.match(deps.dom.errorEl.textContent, /No content available/);
+      assert.match(deps._mocks.mockUI.showError.mock.calls[0].arguments[0], /No content available/);
     });
 
     it("shows error when pipeline produces empty segments", async () => {
@@ -306,7 +309,7 @@ describe("createReader", () => {
       });
       const reader = createReader(deps);
       await reader.init();
-      assert.match(deps.dom.errorEl.textContent, /Could not extract/);
+      assert.match(deps._mocks.mockUI.showError.mock.calls[0].arguments[0], /Could not extract/);
     });
 
     it("shows error when content fetch throws", async () => {
@@ -316,11 +319,14 @@ describe("createReader", () => {
       });
       const reader = createReader(deps);
       await reader.init();
-      assert.match(deps.dom.errorEl.textContent, /Failed to load content/);
+      assert.match(
+        deps._mocks.mockUI.showError.mock.calls[0].arguments[0],
+        /Failed to load content/
+      );
     });
 
     it("does not connect to background on error", async () => {
-      const deps = makeDeps({ dom: { location: { search: "?tabId=abc" } } });
+      const deps = makeDeps({ env: { location: { search: "?tabId=abc" } } });
       const reader = createReader(deps);
       await reader.init();
       assert.equal(deps.browser.runtime.connect.mock.callCount(), 0);
@@ -340,7 +346,6 @@ describe("createReader", () => {
       deps.functions.loadCachedVoices = mock.fn(async () => [
         { name: "en-US-AriaNeural", locale: "en-US" },
       ]);
-      // Make fetchVoices slow enough that we can trigger onVoiceChange before it resolves
       let fetchVoicesResolve;
       const freshVoices = [{ name: "en-US-GuyNeural", locale: "en-US" }];
       deps.functions.fetchVoices = mock.fn(
@@ -351,20 +356,15 @@ describe("createReader", () => {
       );
 
       const initPromise = createReader(deps).init();
-      // Wait for cache-based voice to be set, then simulate user changing voice
       await new Promise((r) => setTimeout(r, 10));
       if (fetchVoicesResolve) {
-        // Simulate user changed voice before fresh voices arrive
         deps._mocks.mockControls._cbs.onVoiceChange("ja-JP-NanamiNeural");
         fetchVoicesResolve();
       }
       await initPromise;
 
-      // resolveVoice should NOT have been called again for fresh voices
-      // because userChangedVoice was set to true
       const setVoiceCalls = deps._mocks.mockControls.setVoice.mock.calls;
       const lastSetVoice = setVoiceCalls[setVoiceCalls.length - 1]?.arguments[0];
-      // Should NOT have overwritten the user's manual choice with fresh voice resolution
       assert.notEqual(lastSetVoice, "en-US-GuyNeural");
     });
 
@@ -381,8 +381,6 @@ describe("createReader", () => {
       };
       const reader = createReader(deps);
       await reader.init();
-      // voice should be set to fallback-voice (tested via cleanup/internal state)
-      // We verify indirectly: controls.selectedVoice was the fallback
       assert.equal(deps._mocks.mockControls.selectedVoice, "fallback-voice");
     });
   });
@@ -393,7 +391,6 @@ describe("createReader", () => {
       const reader = createReader(deps);
       await reader.init();
       deps._mocks.mockPort._fire({ type: "connected" });
-      // No error thrown — connected state is internal
     });
 
     it("handles ws-error by marking disconnected", async () => {
@@ -402,14 +399,12 @@ describe("createReader", () => {
       await reader.init();
       deps._mocks.mockPort._fire({ type: "connected" });
       deps._mocks.mockPort._fire({ type: "ws-error", conn: 0, message: "fail" });
-      // No crash — state is internal
     });
 
     it("ignores messages with invalid para IDs", async () => {
       const deps = makeDeps();
       const reader = createReader(deps);
       await reader.init();
-      // Should not throw
       deps._mocks.mockPort._fire({ type: "audio", id: "invalid", data: "abc" });
       deps._mocks.mockPort._fire({ type: "audio", id: null, data: "abc" });
       deps._mocks.mockPort._fire({ type: "audio", data: "abc" });
@@ -421,7 +416,6 @@ describe("createReader", () => {
       await reader.init();
       deps._mocks.mockPort._fire({ type: "audio", id: "para-0", data: "chunk1" });
       deps._mocks.mockPort._fire({ type: "audio", id: "para-0", data: "chunk2" });
-      // We verify indirectly via done event resolving pending
     });
 
     it("resolves pending request on done message", async () => {
@@ -437,14 +431,10 @@ describe("createReader", () => {
       await reader.init();
       deps._mocks.mockPort._fire({ type: "connected" });
 
-      // ensureBuffered dispatches and waits
       const ensurePromise = reader._ensureBuffered(0);
-
-      // Simulate TTS response
       deps._mocks.mockPort._fire({ type: "audio", id: "para-0", data: "audiodata" });
       deps._mocks.mockPort._fire({ type: "done", id: "para-0" });
 
-      // Should resolve without timeout
       await ensurePromise;
       assert.equal(mockScheduler.onFetchComplete.mock.callCount(), 1);
     });
@@ -454,7 +444,6 @@ describe("createReader", () => {
       const reader = createReader(deps);
       await reader.init();
       deps._mocks.mockPort._fireDisconnect();
-      // Internal state cleared — no crash on subsequent operations
     });
   });
 
@@ -488,7 +477,6 @@ describe("createReader", () => {
     it("is safe to call without init", () => {
       const deps = makeDeps();
       const reader = createReader(deps);
-      // Should not throw
       reader.cleanup();
     });
   });
@@ -501,7 +489,7 @@ describe("createReader", () => {
       deps._mocks.mockControls._cbs.onVoiceChange("ja-JP-NanamiNeural");
       assert.equal(deps.functions.saveVoicePref.mock.callCount(), 1);
       const args = deps.functions.saveVoicePref.mock.calls[0].arguments;
-      assert.equal(args[0], "en"); // currentLang
+      assert.equal(args[0], "en");
       assert.equal(args[1], "ja-JP-NanamiNeural");
       assert.equal(args[2], deps.browser.storage.local);
     });
@@ -514,7 +502,7 @@ describe("createReader", () => {
       await reader.init();
       deps._mocks.mockControls._cbs.onClose();
       assert.equal(deps._mocks.mockPlayer.destroy.mock.callCount(), 1);
-      const postCalls = deps.dom.window.parent.postMessage.mock.calls;
+      const postCalls = deps.env.window.parent.postMessage.mock.calls;
       assert.ok(postCalls.some((c) => c.arguments[0].type === "lactor-close"));
     });
   });
@@ -567,16 +555,13 @@ describe("createReader", () => {
       const deps = makeDeps();
       const reader = createReader(deps);
       await reader.init();
-      // Do NOT fire "connected" — bgConnected stays false, triggering retries
 
       const countBefore = deps._mocks.mockPort.postMessage.mock.callCount();
       reader._dispatchFetch({ conn: 0, index: 0, text: "Hello" });
       reader.cleanup();
 
-      // Wait long enough for several retries to have fired if not cancelled
       await new Promise((r) => setTimeout(r, 400));
 
-      // No new speak messages should have been sent after cleanup
       const speakCalls = deps._mocks.mockPort.postMessage.mock.calls
         .slice(countBefore)
         .filter((c) => c.arguments[0].action === "speak");
@@ -587,16 +572,13 @@ describe("createReader", () => {
       const deps = makeDeps();
       const reader = createReader(deps);
       await reader.init();
-      // bgConnected is false — dispatches will retry and trigger reconnect
 
       reader._dispatchFetch({ conn: 0, index: 0, text: "Hello" });
       reader._dispatchFetch({ conn: 1, index: 1, text: "World" });
 
-      // Count how many "connect" action messages were sent after init's own connect
       const connectCalls = deps._mocks.mockPort.postMessage.mock.calls.filter(
         (c) => c.arguments[0].action === "connect"
       );
-      // init sends one "connect"; retries should add at most one more (not two)
       assert.ok(
         connectCalls.length <= 2,
         `expected at most 2 connect calls (init + 1 reconnect), got ${connectCalls.length}`
@@ -609,15 +591,12 @@ describe("createReader", () => {
       const deps = makeDeps();
       const reader = createReader(deps);
       await reader.init();
-      // bgConnected is false
 
       reader._dispatchFetch({ conn: 0, index: 0, text: "Hello" });
 
-      // Simulate connection restored after a short delay
       await new Promise((r) => setTimeout(r, 150));
       deps._mocks.mockPort._fire({ type: "connected" });
 
-      // Wait for retry to pick it up
       await new Promise((r) => setTimeout(r, 200));
 
       const speakCalls = deps._mocks.mockPort.postMessage.mock.calls.filter(
@@ -635,11 +614,9 @@ describe("createReader", () => {
       const reader = createReader(deps);
       await reader.init();
 
-      // Pre-fill buffer via port messages
       deps._mocks.mockPort._fire({ type: "audio", id: "para-0", data: "chunk" });
       deps._mocks.mockPort._fire({ type: "done", id: "para-0" });
 
-      // Should resolve immediately
       await reader._ensureBuffered(0);
     });
 
@@ -668,10 +645,7 @@ describe("createReader", () => {
       await reader.init();
       deps._mocks.mockPort._fire({ type: "connected" });
 
-      // Start ensureBuffered without resolving it
       const promise = reader._ensureBuffered(0);
-
-      // Cleanup should reject the pending promise
       reader.cleanup();
 
       await assert.rejects(promise, { message: "cleanup" });
@@ -684,7 +658,6 @@ describe("createReader", () => {
       const reader = createReader(deps);
       await reader.init();
 
-      // Play past the last paragraph
       await reader._playFromParagraph(999);
       assert.equal(deps._mocks.mockControls.setPlaying.mock.callCount(), 1);
       assert.equal(deps._mocks.mockControls.setPlaying.mock.calls[0].arguments[0], false);
@@ -704,15 +677,10 @@ describe("createReader", () => {
       await reader.init();
       deps._mocks.mockPort._fire({ type: "connected" });
 
-      // Buffer para 0 with empty audio (done but no chunks)
       deps._mocks.mockPort._fire({ type: "done", id: "para-0" });
-
-      // Buffer para 1 with done but also empty — will chain through to end
       deps._mocks.mockPort._fire({ type: "done", id: "para-1" });
 
-      // Both paragraphs have no audio → should skip to end
       await reader._playFromParagraph(0);
-      // Eventually calls setPlaying(false) when it runs out of paragraphs
       assert.ok(deps._mocks.mockControls.setPlaying.mock.callCount() >= 1);
     });
 
@@ -730,7 +698,6 @@ describe("createReader", () => {
       await reader.init();
       deps._mocks.mockPort._fire({ type: "connected" });
 
-      // Buffer para 0 with audio data
       deps._mocks.mockPort._fire({ type: "audio", id: "para-0", data: "audio1" });
       deps._mocks.mockPort._fire({
         type: "word",
@@ -740,7 +707,6 @@ describe("createReader", () => {
         audioOffset: 0,
       });
       deps._mocks.mockPort._fire({ type: "done", id: "para-0" });
-      // Buffer para 1 as empty so the while-loop can terminate
       deps._mocks.mockPort._fire({ type: "done", id: "para-1" });
 
       await reader._playFromParagraph(0);
@@ -750,6 +716,64 @@ describe("createReader", () => {
       assert.equal(deps._mocks.mockHighlight.addWordEvents.mock.callCount(), 1);
       assert.equal(deps._mocks.mockPlayer.play.mock.callCount(), 1);
       assert.equal(deps._mocks.mockHighlight.start.mock.callCount(), 1);
+    });
+
+    it("calls ui.markCurrent and ui.markPlayed during playback", async () => {
+      const deps = makeDeps();
+      const mockScheduler = makeMockScheduler();
+      mockScheduler.fetchByIndex = mock.fn((i) => ({
+        conn: 0,
+        index: i,
+        text: "Hello world",
+      }));
+      deps.components.createScheduler = () => mockScheduler;
+
+      const reader = createReader(deps);
+      await reader.init();
+      deps._mocks.mockPort._fire({ type: "connected" });
+
+      deps._mocks.mockPort._fire({ type: "audio", id: "para-0", data: "audio1" });
+      deps._mocks.mockPort._fire({ type: "done", id: "para-0" });
+      deps._mocks.mockPort._fire({ type: "done", id: "para-1" });
+
+      await reader._playFromParagraph(0);
+
+      assert.ok(deps._mocks.mockUI.markCurrent.mock.callCount() >= 1);
+      assert.equal(deps._mocks.mockUI.markCurrent.mock.calls[0].arguments[0], 0);
+      assert.ok(deps._mocks.mockUI.markPlayed.mock.callCount() >= 1);
+      assert.equal(deps._mocks.mockUI.markPlayed.mock.calls[0].arguments[0], 0);
+    });
+
+    it("stops playback loop when decodeAudio throws", async () => {
+      const deps = makeDeps();
+      const mockScheduler = makeMockScheduler();
+      mockScheduler.fetchByIndex = mock.fn((i) => ({
+        conn: 0,
+        index: i,
+        text: "Hello world",
+      }));
+      deps.components.createScheduler = () => mockScheduler;
+      deps._mocks.mockPlayer.decodeAudio = mock.fn(async () => {
+        throw new Error("decode error");
+      });
+
+      const reader = createReader(deps);
+      await reader.init();
+      deps._mocks.mockPort._fire({ type: "connected" });
+
+      // Buffer para 0 with audio data that will fail to decode
+      deps._mocks.mockPort._fire({ type: "audio", id: "para-0", data: "bad-audio" });
+      deps._mocks.mockPort._fire({ type: "done", id: "para-0" });
+      // Buffer para 1 with audio data — should NOT be reached
+      deps._mocks.mockPort._fire({ type: "audio", id: "para-1", data: "audio1" });
+      deps._mocks.mockPort._fire({ type: "done", id: "para-1" });
+
+      await reader._playFromParagraph(0);
+
+      // decode was called for para 0 only, not para 1
+      assert.equal(deps._mocks.mockPlayer.decodeAudio.mock.callCount(), 1);
+      // play was never called (decode failed before play)
+      assert.equal(deps._mocks.mockPlayer.play.mock.callCount(), 0);
     });
   });
 });
