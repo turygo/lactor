@@ -1,5 +1,10 @@
 # Lactor
 
+> [!WARNING]
+> **该项目已废弃 / DEPRECATED**
+>
+> 本项目已停止维护，不再接受问题反馈、功能请求或 Pull Request。请勿在生产环境使用。
+
 Immersive web article reader with synchronized TTS and word-by-word highlighting.
 
 ## Quick Start
